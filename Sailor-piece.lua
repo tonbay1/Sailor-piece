@@ -1,360 +1,533 @@
 repeat task.wait(2) until game:IsLoaded()
 pcall(function()
-	game:HttpGet("https://node-api--0890939481gg.replit.app/join")
+    game:HttpGet("https://node-api--0890939481gg.replit.app/join")
 end)
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local vim = game:GetService("VirtualInputManager")
+	local Players = game:GetService("Players")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local vim = game:GetService("VirtualInputManager")
 
-local player = Players.LocalPlayer
+	local player = Players.LocalPlayer
 
--- ======================
--- Settings (reduce lag)
--- ======================
-local SettingsToggle = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("SettingsToggle")
+	-- ปิด setting ลดแลค
+	local SettingsToggle = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("SettingsToggle")
 
-local settings = {
+	local settings = {
 	"DisablePvP",
 	"DisableVFX",
 	"DisableOtherVFX",
 	"RemoveTexture",
 	"AutoSkillC",
 	"RemoveShadows"
-}
+	}
 
-for _, setting in ipairs(settings) do
-	local current = player:FindFirstChild("Settings")
+	for _,setting in ipairs(settings) do
+		local current = player:FindFirstChild("Settings")
 		and player.Settings:FindFirstChild(setting)
-	if not current or current.Value ~= true then
-		SettingsToggle:FireServer(setting, true)
-	end
-end
 
--- ======================
--- Remotes
--- ======================
+		if not current or current.Value ~= true then
+			SettingsToggle:FireServer(setting, true)
+		end
+	end
+
+	-- ======================
+
+	
+
+
+	
+	local lastQuest = nil
+	local BlackScreen = true
+
+	local function setBlack(state)
+
+		if state then
+			game.Lighting.Brightness = 0
+			game.Lighting.GlobalShadows = false
+
+			for _,v in ipairs(workspace:GetDescendants()) do
+				if v:IsA("BasePart") then
+					v.LocalTransparencyModifier = 1
+				end
+			end
+		else
+			for _,v in ipairs(workspace:GetDescendants()) do
+				if v:IsA("BasePart") then
+					v.LocalTransparencyModifier = 0
+				end
+			end
+		end
+
+	end
+
+	setBlack(true)
+
+	-- GUI
+	local gui = Instance.new("ScreenGui")
+	gui.Parent = player.PlayerGui
+	gui.ResetOnSpawn = false
+
+	local button = Instance.new("TextButton")
+	button.Parent = gui
+	button.Size = UDim2.new(0,160,0,45)
+	button.Position = UDim2.new(0,20,0.5,-22)
+	button.BackgroundColor3 = Color3.fromRGB(25,25,25)
+	button.TextColor3 = Color3.fromRGB(255,255,255)
+	button.Text = "FpsBoot : ON"
+	button.Font = Enum.Font.GothamBold
+	button.TextSize = 16
+
+	-- มุมโค้ง
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0,10)
+	corner.Parent = button
+
+	-- เส้นขอบ
+	local stroke = Instance.new("UIStroke")
+	stroke.Parent = button
+	stroke.Color = Color3.fromRGB(0,170,255)
+	stroke.Thickness = 2
+
+	-- เงา
+	local shadow = Instance.new("ImageLabel")
+	shadow.Parent = button
+	shadow.BackgroundTransparency = 1
+	shadow.Size = UDim2.new(1,20,1,20)
+	shadow.Position = UDim2.new(0,-10,0,-10)
+	shadow.Image = "rbxassetid://1316045217"
+	shadow.ImageTransparency = 0.7
+	shadow.ZIndex = 0
+
+	button.MouseButton1Click:Connect(function()
+
+	BlackScreen = not BlackScreen
+	setBlack(BlackScreen)
+
+	if BlackScreen then
+		button.Text = "BlackScreen : ON"
+	else
+		button.Text = "BlackScreen : OFF"
+	end
+
+end)
+
+-- ถ้าตายให้เปิดใหม่ตามสถานะ
+player.CharacterAdded:Connect(function()
+task.wait(1)
+setBlack(BlackScreen)
+end)
+
+
 local hitRemote = ReplicatedStorage.CombatSystem.Remotes.RequestHit
 local questRemote = ReplicatedStorage.RemoteEvents.QuestAccept
 local abandonRemote = ReplicatedStorage.RemoteEvents.QuestAbandon
 local statRemote = ReplicatedStorage.RemoteEvents.AllocateStat
-
--- ======================
--- Helper Functions
--- ======================
-local lastQuest = nil
-local BlackScreen = true
-local startTime = os.time()
+local tpRemote = ReplicatedStorage.Remotes.TeleportToPortal
 
 local function getChar()
 	local char = player.Character or player.CharacterAdded:Wait()
 	local hrp = char:WaitForChild("HumanoidRootPart")
 	local hum = char:WaitForChild("Humanoid")
-	return char, hrp, hum
+	return char,hrp,hum
 end
 
-local char, hrp, hum = getChar()
+local char,hrp,hum = getChar()
 
-function getInfoQuest()
-	local quests = {}
-	local result = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("GetQuestArrowTarget"):InvokeServer()
-	for i, v in pairs(result) do
-		quests[i] = v
-	end
-	return quests
-end
-
-function getnpcQuest(npcname)
-	local module = require(ReplicatedStorage.Modules.QuestConfig)
-	for questNPC, questData in pairs(module.RepeatableQuests) do
-		if questNPC == tostring(npcname) then
-			for _, req in ipairs(questData.requirements) do
-				return req.npcType
-			end
-		end
-	end
-	return nil
-end
-
--- ======================
--- BlackScreen (FPS Boost)
--- ======================
-local function setBlack(state)
-	if state then
-		game.Lighting.Brightness = 0
-		game.Lighting.GlobalShadows = false
-		for _, v in ipairs(workspace:GetDescendants()) do
-			if v:IsA("BasePart") then
-				v.LocalTransparencyModifier = 1
-			end
-		end
-	else
-		for _, v in ipairs(workspace:GetDescendants()) do
-			if v:IsA("BasePart") then
-				v.LocalTransparencyModifier = 0
-			end
-		end
-	end
-end
-
-setBlack(true)
-
--- GUI
-local gui = Instance.new("ScreenGui")
-gui.Parent = player.PlayerGui
-gui.ResetOnSpawn = false
-
-local button = Instance.new("TextButton")
-button.Parent = gui
-button.Size = UDim2.new(0, 160, 0, 45)
-button.Position = UDim2.new(0, 20, 0.5, -22)
-button.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-button.TextColor3 = Color3.fromRGB(255, 255, 255)
-button.Text = "FpsBoost : ON"
-button.Font = Enum.Font.GothamBold
-button.TextSize = 16
-
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = button
-
-local stroke = Instance.new("UIStroke")
-stroke.Parent = button
-stroke.Color = Color3.fromRGB(0, 170, 255)
-stroke.Thickness = 2
-
-button.MouseButton1Click:Connect(function()
-	BlackScreen = not BlackScreen
-	setBlack(BlackScreen)
-	if BlackScreen then
-		button.Text = "FpsBoost : ON"
-	else
-		button.Text = "FpsBoost : OFF"
-	end
-end)
-
-player.CharacterAdded:Connect(function()
-	task.wait(1)
-	setBlack(BlackScreen)
-end)
-
--- ======================
--- Equip best weapon
--- ======================
+-- Equip weapon at start
 task.spawn(function()
 	task.wait(3)
-	pcall(function()
-		local backpack = player:WaitForChild("Backpack", 10)
-		if not backpack then return end
-		local currentChar = player.Character
-		if not currentChar then return end
-		local currentHum = currentChar:FindFirstChild("Humanoid")
-		if not currentHum then return end
-
-		local bestTool = nil
-		local bestLevel = 0
-
-		for _, tool in ipairs(backpack:GetChildren()) do
-			if tool:IsA("Tool") then
-				if tool.ToolTip == "Black Blade" then
-					bestTool = tool
-					break
-				end
-				local level = tonumber(tool.Name:match("%[Lv%.%s*(%d+)%]")) or 0
-				if level > bestLevel then
-					bestLevel = level
-					bestTool = tool
-				elseif not bestTool then
-					bestTool = tool
-				end
-			end
+	
+	local backpack = player:WaitForChild("Backpack", 10)
+	if not backpack then return end
+	
+	local currentChar = player.Character
+	if not currentChar then return end
+	
+	local currentHum = currentChar:FindFirstChild("Humanoid")
+	if not currentHum then return end
+	
+	-- List all tools in backpack
+	print("=== Tools in Backpack ===")
+	for _, tool in ipairs(backpack:GetChildren()) do
+		if tool:IsA("Tool") then
+			print("Found tool:", tool.Name)
 		end
-
-		if bestTool and bestTool.Parent == backpack then
-			currentHum:EquipTool(bestTool)
-			print("Equipped:", bestTool.Name)
-		end
-	end)
-end)
-
--- ======================
--- Horst Level Display
--- ======================
-task.spawn(function()
-	local HttpService = game:GetService("HttpService")
-	local data = player:WaitForChild("Data", 10)
-	if not data then return end
-
-	local levelValue = data:FindFirstChild("Level")
-	local moneyValue = data:FindFirstChild("Money")
-
-	while task.wait(1) do
-		local level = levelValue and levelValue.Value or 0
-		local money = moneyValue and moneyValue.Value or 0
-		local message = " Level " .. level .. " Money " .. money
-		local json = { Level = level, Money = money }
-		local encoded = HttpService:JSONEncode(json)
-		pcall(function()
-			_G.Horst_SetDescription(message, encoded)
-		end)
+	end
+	print("=========================")
+	
+	-- Try Combat first (default weapon)
+	local tool = backpack:FindFirstChild("Combat") or currentChar:FindFirstChild("Combat")
+	
+	if tool and tool.Parent == backpack then
+		currentHum:EquipTool(tool)
+		print("Equipped Combat from backpack")
 	end
 end)
 
 -- ======================
--- Rare Items Tracker
+-- Inventory Tracker (by Rarity)
 -- ======================
-local rareItemsList = {}
+local inventoryByRarity = {
+	Secret = {},
+	Mythical = {},
+	Legendary = {},
+	Epic = {},
+	Rare = {},
+	Uncommon = {},
+	Common = {}
+}
+
+local cratesAndBoxes = {}
 
 task.spawn(function()
-	local updateInventory = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("UpdateInventory")
+	local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+	local updateInventory = Remotes:WaitForChild("UpdateInventory")
+	local requestInventory = Remotes:WaitForChild("RequestInventory")
+	
+	-- Load configs
+	local Modules = ReplicatedStorage:WaitForChild("Modules")
+	local ItemRarityConfig = require(Modules:WaitForChild("ItemRarityConfig"))
+	
 	updateInventory.OnClientEvent:Connect(function(category, items)
-		if category == "Items" or category == "Accessories" or category == "Auras" or category == "Cosmetics" then
-			local ItemRarityConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ItemRarityConfig"))
+		print("[INVENTORY] Received update for category:", category, "| Items count:", items and #items or 0)
+		
+		if not items then return end
+		
+		-- Track all categories
+		if category == "Items" or category == "Accessories" or category == "Auras" or category == "Cosmetics" or category == "Melee" or category == "Sword" or category == "Power" then
 			for _, item in pairs(items) do
-				local rarity = ItemRarityConfig:GetRarity(item.name)
-				if rarity == "Mythical" or rarity == "Secret" or rarity == "Legendary" then
-					local itemName = item.name
-					local quantity = item.quantity or 1
-					if rareItemsList[itemName] then
-						rareItemsList[itemName].quantity = quantity
-					else
-						rareItemsList[itemName] = { name = itemName, rarity = rarity, quantity = quantity }
-						print(string.format("NEW %s: %s x%d", rarity:upper(), itemName, quantity))
+				local itemName = item.name
+				local quantity = item.quantity or 1
+				
+				if not itemName then continue end
+				
+				-- Check if it's a crate/box by name
+				if itemName:lower():find("crate") or itemName:lower():find("box") or itemName:lower():find("chest") then
+					cratesAndBoxes[itemName] = quantity
+					print("[INVENTORY] Crate:", itemName, "x"..quantity)
+				end
+				
+				-- Get rarity and store
+				local success, rarity = pcall(function()
+					return ItemRarityConfig:GetRarity(itemName)
+				end)
+				
+				if success and rarity and inventoryByRarity[rarity] then
+					inventoryByRarity[rarity][itemName] = quantity
+					if rarity == "Secret" or rarity == "Mythical" or rarity == "Legendary" then
+						print("[INVENTORY]", rarity, ":", itemName, "x"..quantity)
 					end
 				end
 			end
 		end
 	end)
+	
+	-- Request inventory data on start
+	task.wait(3)
+	print("[INVENTORY] Requesting inventory data...")
+	pcall(function()
+		requestInventory:FireServer()
+	end)
 end)
 
--- Print rare items list (F1 key)
+-- Print inventory by rarity (F1 key)
 game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 	if input.KeyCode == Enum.KeyCode.F1 then
-		print("=== RARE ITEMS LIST ===")
-		for _, item in pairs(rareItemsList) do
-			print(string.format("[%s] %s x%d", item.rarity, item.name, item.quantity))
+		local data = player:WaitForChild("Data", 2)
+		if not data then return end
+		
+		local level = data:FindFirstChild("Level") and data.Level.Value or 0
+		local money = data:FindFirstChild("Money") and data.Money.Value or 0
+		local gems = data:FindFirstChild("Gems") and data.Gems.Value or 0
+		
+		print("\n========================================")
+		print("📊 INVENTORY SUMMARY")
+		print("========================================")
+		print("⭐ Level: " .. level)
+		print("💰 Money: " .. money)
+		print("💎 Gems: " .. gems)
+		print("========================================\n")
+		
+		local rarityOrder = {"Secret", "Mythical", "Legendary", "Epic", "Rare", "Uncommon", "Common"}
+		local rarityEmojis = {
+			Secret = "🌟",
+			Mythical = "✨",
+			Legendary = "🔥",
+			Epic = "💜",
+			Rare = "💙",
+			Uncommon = "💚",
+			Common = "⚪"
+		}
+		
+		-- Show Crates/Boxes first
+		local crateCount = 0
+		for _ in pairs(cratesAndBoxes) do
+			crateCount = crateCount + 1
 		end
-		print("======================")
+		
+		if crateCount > 0 then
+			print("📦 [CRATES & BOXES] - " .. crateCount .. " types:")
+			for crateName, quantity in pairs(cratesAndBoxes) do
+				print("   • " .. crateName .. " x" .. quantity)
+			end
+			print("")
+		end
+		
+		-- Show items by rarity
+		for _, rarity in ipairs(rarityOrder) do
+			local items = inventoryByRarity[rarity]
+			local count = 0
+			
+			for _ in pairs(items) do
+				count = count + 1
+			end
+			
+			if count > 0 then
+				print(rarityEmojis[rarity] .. " [" .. rarity:upper() .. "] - " .. count .. " items:")
+				for itemName, quantity in pairs(items) do
+					print("   • " .. itemName .. " x" .. quantity)
+				end
+				print("")
+			end
+		end
+		
+		print("========================================")
+		print("Press F1 to refresh inventory")
+		print("========================================\n")
 	end
 end)
 
 -- ======================
--- Auto Hit (rapid fire every frame)
+-- Horst Level Display (with Gems + Inventory)
 -- ======================
 task.spawn(function()
-	while task.wait() do
-		pcall(function()
-			hitRemote:FireServer()
-		end)
+
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+
+-- รอ LocalPlayer
+local player = Players.LocalPlayer
+while not player do
+	task.wait()
+	player = Players.LocalPlayer
+end
+
+-- รอ Data
+local data = player:WaitForChild("Data",10)
+if not data then return end
+
+local levelValue = data:FindFirstChild("Level")
+local moneyValue = data:FindFirstChild("Money")
+local gemsValue = data:FindFirstChild("Gems")
+
+local lastText = ""
+
+while task.wait(1) do
+
+	local level = 0
+	local money = 0
+	local gems = 0
+
+	if levelValue then
+		level = levelValue.Value
 	end
+
+	if moneyValue then
+		money = moneyValue.Value
+	end
+	
+	if gemsValue then
+		gems = gemsValue.Value
+	end
+	
+	-- Count items by rarity
+	local rarityCounts = {
+		Secret = 0,
+		Mythical = 0,
+		Legendary = 0,
+		Epic = 0,
+		Rare = 0,
+		Uncommon = 0,
+		Common = 0
+	}
+	
+	for rarity, items in pairs(inventoryByRarity) do
+		for itemName, quantity in pairs(items) do
+			rarityCounts[rarity] = rarityCounts[rarity] + 1
+		end
+	end
+	
+	-- Count crates/boxes
+	local crateCount = 0
+	for _ in pairs(cratesAndBoxes) do
+		crateCount = crateCount + 1
+	end
+
+	local message = " Level "..level.." Money "..money.." Gems "..gems
+	
+	-- Add inventory summary to message
+	if crateCount > 0 then
+		message = message .. " | Crates: "..crateCount
+	end
+	if rarityCounts.Secret > 0 then
+		message = message .. " | Secret: "..rarityCounts.Secret
+	end
+	if rarityCounts.Mythical > 0 then
+		message = message .. " | Mythical: "..rarityCounts.Mythical
+	end
+	if rarityCounts.Legendary > 0 then
+		message = message .. " | Legendary: "..rarityCounts.Legendary
+	end
+
+	local json = {
+		Level = level,
+		Money = money,
+		Gems = gems,
+		Inventory = {
+			Crates = crateCount,
+			Secret = rarityCounts.Secret,
+			Mythical = rarityCounts.Mythical,
+			Legendary = rarityCounts.Legendary,
+			Epic = rarityCounts.Epic,
+			Rare = rarityCounts.Rare,
+			Uncommon = rarityCounts.Uncommon,
+			Common = rarityCounts.Common
+		},
+		CratesDetail = cratesAndBoxes,
+		ItemsByRarity = inventoryByRarity
+	}
+
+	local encoded = HttpService:JSONEncode(json)
+
+	pcall(function()
+		_G.Horst_SetDescription(message, encoded)
+	end)
+
+end
+
+end)
+-- auto hit
+task.spawn(function()
+while task.wait(0.4) do
+	pcall(function()
+
+	local currentChar = player.Character
+	if not currentChar then return end
+	
+	local currentHrp = currentChar:FindFirstChild("HumanoidRootPart")
+	if not currentHrp then return end
+
+	hitRemote:FireServer()
+
+	local nearestNPC
+	local distance = math.huge
+
+	for _,npc in ipairs(workspace.NPCs:GetChildren()) do
+		if npc:FindFirstChild("HumanoidRootPart") and npc:FindFirstChild("Humanoid") then
+			if npc.Humanoid.Health > 0 then
+				local dist = (currentHrp.Position - npc.HumanoidRootPart.Position).Magnitude
+
+				if dist < distance then
+					distance = dist
+					nearestNPC = npc
+				end
+			end
+		end
+	end
+
+	-- ถ้ามอนอยู่ใกล้ (เช่น 12 studs)
+	if nearestNPC and distance <= 12 then
+		vim:SendKeyEvent(true,"Z",false,game)
+		task.wait(0.1)
+		vim:SendKeyEvent(false,"Z",false,game)
+	end
+
+end)
+end
 end)
 
--- ======================
--- Auto Dodge (press Z when NPC nearby)
--- ======================
+
+-- auto stat
 task.spawn(function()
-	while task.wait(0.4) do
-		pcall(function()
-			local currentChar = player.Character
-			if not currentChar then return end
-			local currentHrp = currentChar:FindFirstChild("HumanoidRootPart")
-			if not currentHrp then return end
+while task.wait(1) do
+	pcall(function()
+	statRemote:FireServer("Melee",2)
+	statRemote:FireServer("Defense",1)
+end)
+end
+end)
 
-			local nearestNPC
-			local distance = math.huge
-
-			for _, npc in ipairs(workspace.NPCs:GetChildren()) do
-				if npc:FindFirstChild("HumanoidRootPart") and npc:FindFirstChild("Humanoid") then
-					if npc.Humanoid.Health > 0 then
-						local dist = (currentHrp.Position - npc.HumanoidRootPart.Position).Magnitude
-						if dist < distance then
-							distance = dist
-							nearestNPC = npc
+-- Auto Open Lucky Boxes
+task.spawn(function()
+while task.wait(5) do
+	pcall(function()
+		local currentChar = player.Character
+		if not currentChar then return end
+		
+		local currentHrp = currentChar:FindFirstChild("HumanoidRootPart")
+		if not currentHrp then return end
+		
+		-- Find all boxes in workspace
+		for _, obj in ipairs(workspace:GetDescendants()) do
+			if obj:IsA("Model") or obj:IsA("Part") then
+				local name = obj.Name:lower()
+				-- Check if it's a box/chest
+				if name:find("box") or name:find("chest") or name:find("lucky") or name:find("crate") then
+					local boxPart = obj:IsA("Part") and obj or obj:FindFirstChild("HitBox") or obj:FindFirstChild("Main") or obj:FindFirstChildWhichIsA("Part")
+					
+					if boxPart then
+						local distance = (currentHrp.Position - boxPart.Position).Magnitude
+						
+						-- If box is nearby (within 100 studs)
+						if distance <= 100 then
+							-- Teleport to box
+							currentHrp.CFrame = boxPart.CFrame
+							task.wait(0.5)
+							
+							-- Try to interact (common methods)
+							if obj:FindFirstChild("ClickDetector") then
+								fireclickdetector(obj.ClickDetector)
+							end
+							
+							-- Try ProximityPrompt
+							local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+							if prompt then
+								fireproximityprompt(prompt)
+							end
+							
+							task.wait(1)
 						end
 					end
 				end
 			end
-
-			if nearestNPC and distance <= 12 then
-				vim:SendKeyEvent(true, "Z", false, game)
-				task.wait(0.1)
-				vim:SendKeyEvent(false, "Z", false, game)
-			end
-		end)
-	end
-end)
-
--- ======================
--- Auto Stat
--- ======================
-task.spawn(function()
-	while task.wait(1) do
-		pcall(function()
-			statRemote:FireServer("Melee", 2)
-			statRemote:FireServer("Defense", 1)
-		end)
-	end
-end)
-
--- ======================
--- Anti-AFK
--- ======================
-task.spawn(function()
-	while task.wait(60) do
-		pcall(function()
-			ReplicatedStorage.Remotes.AntiAFKHeartbeat:FireServer()
-		end)
-	end
-end)
-
--- ======================
--- Auto Haki
--- ======================
-task.spawn(function()
-	while task.wait(5) do
-		pcall(function()
-			ReplicatedStorage.Remotes.ConquerorHakiRemote:FireServer()
-		end)
-		pcall(function()
-			ReplicatedStorage.RemoteEvents.ObservationHakiRemote:FireServer()
-		end)
-	end
-end)
-
--- ======================
--- Auto Sprint
--- ======================
-task.spawn(function()
-	task.wait(3)
-	pcall(function()
-		ReplicatedStorage.RemoteEvents.SprintToggle:FireServer(true)
+		end
 	end)
+end
 end)
 
--- ======================
--- farmNPC (like reference script)
--- ======================
-local function farmNPC(npcType)
-	while task.wait(0.1) do
+local function farmNPC(name)
+
+	while task.wait(0.2) do
+
 		if hum.Health <= 0 then break end
 
 		local found = false
 
-		for _, npc in pairs(workspace.NPCs:GetChildren()) do
-			if npc:IsA("Model") and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
-				local subName = npc.Humanoid.DisplayName:gsub("%s+", ""):gsub("%[Lv%.%s*%d+%]", "")
+		for i = 1,5 do
+			local npc = workspace.NPCs:FindFirstChild(name..i)
 
-				if npcType == tostring(subName) or npc.Name == npcType then
-					found = true
+			if npc and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
+				found = true
 
-					local target = npc:FindFirstChild("HumanoidRootPart")
-						or npc:FindFirstChild("Torso")
-						or npc:FindFirstChild("UpperTorso")
+				local target =
+				npc:FindFirstChild("HumanoidRootPart")
+				or npc:FindFirstChild("Torso")
+				or npc:FindFirstChild("UpperTorso")
 
-					if target then
-						hrp.CFrame = target.CFrame * CFrame.new(0, 0, 7)
-					end
+				if target then
+					hrp.CFrame = target.CFrame * CFrame.new(0,0,7)
+					task.wait(0.7)
 				end
 			end
 		end
@@ -362,142 +535,212 @@ local function farmNPC(npcType)
 		if not found then
 			break
 		end
+
 	end
+
 end
 
--- ======================
--- farmBoss (like reference script)
--- ======================
-local function farmBoss(npcType)
-	for _, npc in pairs(workspace.NPCs:GetChildren()) do
-		if npc:IsA("Model") and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
-			local subName = npc.Humanoid.DisplayName:gsub("%s+", ""):gsub("%[Lv%.%s*%d+%]", "")
 
-			if npcType == tostring(subName) or npc.Name == npcType then
-				local target = npc:FindFirstChild("HumanoidRootPart")
-					or npc:FindFirstChild("Torso")
-					or npc:FindFirstChild("UpperTorso")
+local function acceptQuest(questName, mapName)
+	if mapName then
+		tpRemote:FireServer(mapName)
+		task.wait(1)
+	end
+	if lastQuest ~= questName then
+		pcall(function()
+			abandonRemote:FireServer("repeatable")
+		end)
+		task.wait(0.5)
+		questRemote:FireServer(questName)
+		lastQuest = questName
+	end
+	questRemote:FireServer(questName)
+end
 
-				if target then
-					print("Farming Boss:", npc.Name)
-					while npc.Parent and npc.Humanoid.Health > 0 do
-						if hum.Health <= 0 then break end
-						hrp.CFrame = target.CFrame * CFrame.new(0, 0, 7)
-						task.wait(0.1)
-					end
-					print("Boss defeated:", npc.Name)
-				end
-				return
+local function farmBoss(name)
+
+	local npc = workspace.NPCs:FindFirstChild(name)
+
+	if npc and npc:FindFirstChild("Humanoid") then
+
+		local target = npc:FindFirstChild("HumanoidRootPart")
+		or npc:FindFirstChild("Torso")
+		or npc:FindFirstChild("UpperTorso")
+
+		if target then
+			print("Farming Boss:", name)
+			while npc.Parent and npc.Humanoid.Health > 0 do
+				if hum.Health <= 0 then break end
+
+				hrp.CFrame = target.CFrame * CFrame.new(0,0,7)
+
+				task.wait()
+
 			end
+			print("Boss defeated:", name)
 		end
+	else
+		-- Boss not found, wait for respawn
+		print("Boss not found:", name, "- waiting for respawn")
+		task.wait(5)
 	end
-	print("Boss not found - waiting for respawn")
-	task.wait(5)
 end
 
--- ======================
--- Main Quest Loop (uses dynamic quest system from Sailor piece.lua)
--- ======================
+-- Auto Farm All Bosses (DISABLED - main loop already farms bosses by level)
+-- Uncomment below if you want to farm bosses separately for rare drops
+--[[local bossesToFarm = {
+	{name = "MonkeyBoss", minLevel = 500, map = "Jungle"},
+	{name = "DesertBoss", minLevel = 1000, map = "Desert"},
+	{name = "SnowBoss", minLevel = 2000, map = "Snow"},
+	{name = "PandaMiniBoss", minLevel = 4000, map = "Shibuya"},
+}
+
+task.spawn(function()
+	task.wait(10)
+	
+	while task.wait(30) do
+		pcall(function()
+			local level = player.Data.Level.Value
+			
+			for _, bossInfo in ipairs(bossesToFarm) do
+				if level >= bossInfo.minLevel then
+					tpRemote:FireServer(bossInfo.map)
+					task.wait(2)
+					
+					local boss = workspace.NPCs:FindFirstChild(bossInfo.name)
+					if boss and boss:FindFirstChild("Humanoid") and boss.Humanoid.Health > 0 then
+						print("Found boss for drops:", bossInfo.name)
+						farmBoss(bossInfo.name)
+						task.wait(2)
+					end
+				end
+			end
+		end)
+	end
+end)
+--]]
+
 while task.wait(0.3) do
 
-	if hum.Health <= 0 or not char.Parent then
-		char, hrp, hum = getChar()
+	if hum.Health <=0 or not char.Parent then
+		char,hrp,hum = getChar()
 	end
 
-	-- Equip best weapon
-	pcall(function()
-		local bestTool = nil
-		local bestLevel = -1
+	local tool = player.Backpack:FindFirstChild("Combat") or char:FindFirstChild("Combat")
 
-		for _, container in pairs({player.Backpack, char}) do
-			if container then
-				for _, tool in pairs(container:GetChildren()) do
-					if tool:IsA("Tool") then
-						-- Priority 1: Black Blade (best weapon)
-						if tool.ToolTip == "Black Blade" or tool.Name == "Black Blade" then
-							bestTool = tool
-							bestLevel = 99999
-							break
-						end
-
-						-- Priority 2: highest level weapon
-						local lvl = tonumber(tool.Name:match("%[Lv%.%s*(%d+)%]"))
-							or tonumber(tool.ToolTip:match("%[Lv%.%s*(%d+)%]"))
-							or tonumber(tool.Name:match("Lv%.?%s*(%d+)"))
-							or 0
-
-						if tool.Name ~= "Combat" and lvl > bestLevel then
-							bestLevel = lvl
-							bestTool = tool
-						end
-					end
-				end
-			end
-			if bestLevel >= 99999 then break end
+	if tool then
+		if tool.Parent ~= char then
+			hum:EquipTool(tool)
 		end
-
-		-- Fallback to Combat if no better weapon
-		if not bestTool then
-			bestTool = player.Backpack:FindFirstChild("Combat") or char:FindFirstChild("Combat")
-		end
-
-		if bestTool and bestTool.Parent ~= char then
-			hum:EquipTool(bestTool)
-			print("Equipped:", bestTool.Name, "| Tip:", bestTool.ToolTip)
-		end
-	end)
-
-	-- Dynamic quest system
-	local questInfo = nil
-	pcall(function()
-		questInfo = getInfoQuest()
-	end)
-
-	if not questInfo then
-		task.wait(1)
-		continue
 	end
 
-	-- Check if we have a quest
-	if not player.PlayerGui.QuestUI.Quest.Visible then
-		print("not have a quest")
-		pcall(function()
-			hrp.CFrame = CFrame.new(questInfo.position)
-		end)
-		questRemote:FireServer(questInfo.npcName)
-		task.wait(0.5)
+	local level = player.Data.Level.Value
 
-	-- Check if wrong quest
-	elseif player.PlayerGui.QuestUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text ~= questInfo.questTitle then
-		print("quest not ok")
-		abandonRemote:FireServer("repeatable")
-		task.wait(0.5)
+	-- 0-250
+	if level <=250 then
+		acceptQuest("QuestNPC1")
+		farmNPC("Thief")
 
-	-- Quest is correct, farm NPCs
-	else
-		-- TP to quest area if far
-		if (hrp.Position - questInfo.position).Magnitude >= 50 then
-			print("TP to quest...")
-			hrp.CFrame = CFrame.new(questInfo.position)
-			task.wait(0.5)
-		end
+		-- 250-500
+	elseif level <=500 then
 
-		-- Get NPC type from quest
-		local npcType = getnpcQuest(questInfo.npcName)
-		if npcType then
-			print("Farming:", npcType)
-			farmNPC(npcType)
-		end
+		acceptQuest("QuestNPC3", "Jungle")
+		farmNPC("Monkey")
+
+		-- 500-750
+	elseif level <=750 then
+
+		acceptQuest("QuestNPC4", "Jungle")
+		farmBoss("MonkeyBoss")
+
+		-- 750-1000
+	elseif level <=1000 then
+
+		acceptQuest("QuestNPC5", "Desert")
+		farmNPC("DesertBandit")
+
+		-- 1000-1500
+	elseif level <=1500 then
+
+		acceptQuest("QuestNPC6", "Desert")
+		farmBoss("DesertBoss")
+
+		-- 1500-2000
+	elseif level <=2000 then
+
+		acceptQuest("QuestNPC7", "Snow")
+		farmNPC("FrostRogue")
+
+		-- 2000-3000
+	elseif level <=3000 then
+
+		acceptQuest("QuestNPC8", "Snow")
+		farmBoss("SnowBoss")
+
+		-- 3000-4000
+	elseif level <=4000 then
+
+		acceptQuest("QuestNPC9", "Shibuya")
+		farmNPC("Sorcerer")
+
+		-- 4000-5000
+	elseif level <=5000 then
+
+		acceptQuest("QuestNPC10", "Shibuya")
+		farmBoss("PandaMiniBoss")
+
+		-- 5000-6251
+	elseif level <=6251 then
+
+		acceptQuest("QuestNPC11", "HuecoMundo")
+		farmNPC("Hollow")
+
+		-- 6251-7001
+	elseif level <=7001 then
+
+		acceptQuest("QuestNPC12", "Shinjuku")
+		farmNPC("StrongSorcerer")
+
+		-- 7001-8001
+	elseif level <=8001 then
+
+		acceptQuest("QuestNPC13", "Shinjuku")
+		farmNPC("Curse")
+
+		-- 8001-9001
+	elseif level <=9001 then
+
+		acceptQuest("QuestNPC14", "Slime")
+		farmNPC("Slime")
+
+		-- 9001-10001
+	elseif level <=10001 then
+
+		acceptQuest("QuestNPC15", "Academy")
+		farmNPC("AcademyTeacher")
+
+		-- 10001-10751
+	elseif level <=10751 then
+
+		acceptQuest("QuestNPC16", "Judgement")
+		farmNPC("Swordsman")
+
 	end
 
 	task.wait(0.5)
+
 end
 
--- ======================
--- On Leave
+
+player.OnTeleport:Connect(function(State)
+if State == Enum.TeleportState.Failed then
+	task.wait(1.5)
+	rejoin()
+end
+end)
 -- ======================
 game:GetService("Players").PlayerRemoving:Connect(function()
-	pcall(function()
-		game:HttpGet("https://node-api--0890939481gg.replit.app/leave")
-	end)
+    pcall(function()
+        game:HttpGet("https://node-api--0890939481gg.replit.app/leave")
+    end)
 end)
