@@ -357,26 +357,39 @@ while task.wait(1) do
 
 	local message = "⭐ Level "..level.." 💰 Money "..money.." 💎 Gems "..gems
 	
-	-- Add inventory details to message (show actual item names)
-	if totalItems > 0 or #cratesList > 0 then
-		if #cratesList > 0 then
-			message = message .. " - 📦 "..table.concat(cratesList, ", ")
+	-- Filter and show only important items
+	local importantItems = {}
+	
+	-- Important crates
+	for _, crateInfo in pairs(cratesList) do
+		if crateInfo:find("Legendary Chest") or crateInfo:find("Mythical Chest") then
+			table.insert(importantItems, "📦 "..crateInfo)
 		end
-		if #itemLists.Secret > 0 then
-			message = message .. " - 🌟 "..table.concat(itemLists.Secret, ", ")
+	end
+	
+	-- Important items from all rarities
+	for rarity, items in pairs(itemLists) do
+		for _, itemInfo in pairs(items) do
+			if itemInfo:find("Clan Reroll") or itemInfo:find("Race Reroll") or itemInfo:find("Trait Reroll") or 
+			   itemInfo:find("Rush Key") or itemInfo:find("Adamantite") or itemInfo:find("Mythril") or
+			   itemInfo:find("Aura") or itemInfo:find("Fragment") then
+				local emoji = "🔥"
+				if rarity == "Secret" then emoji = "🌟"
+				elseif rarity == "Mythical" then emoji = "✨"
+				elseif rarity == "Legendary" then emoji = "🔥"
+				elseif rarity == "Epic" then emoji = "💜"
+				elseif rarity == "Rare" then emoji = "�"
+				end
+				table.insert(importantItems, emoji.." "..itemInfo)
+			end
 		end
-		if #itemLists.Mythical > 0 then
-			message = message .. " - ✨ "..table.concat(itemLists.Mythical, ", ")
-		end
-		if #itemLists.Legendary > 0 then
-			message = message .. " - 🔥 "..table.concat(itemLists.Legendary, ", ")
-		end
-		if #itemLists.Epic > 0 then
-			message = message .. " - 💜 "..table.concat(itemLists.Epic, ", ")
-		end
-		if #itemLists.Rare > 0 then
-			message = message .. " - 💙 "..table.concat(itemLists.Rare, ", ")
-		end
+	end
+	
+	-- Add important items to message
+	if #importantItems > 0 then
+		message = message .. " - "..table.concat(importantItems, " - ")
+	elseif totalItems > 0 or #cratesList > 0 then
+		message = message .. " - � Items: "..totalItems.." types"
 	else
 		message = message .. " - 📋 Items: Loading..."
 	end
