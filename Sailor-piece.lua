@@ -388,23 +388,42 @@ while task.wait(1) do
 		end
 	end
 	
-	-- Show only important items or summary
+	-- Show only important items or summary (keep very short)
 	if #importantItems > 0 then
-		-- Limit to max 5 items to keep message short
-		local maxItems = 5
+		-- Limit to max 3 items and shorten names
+		local shortItems = {}
+		local maxItems = 3
+		
+		for i = 1, math.min(maxItems, #importantItems) do
+			local item = importantItems[i]
+			-- Shorten common item names
+			item = item:gsub("Legendary Chest", "L.Chest")
+			item = item:gsub("Mythical Chest", "M.Chest")
+			item = item:gsub("Clan Reroll", "ClanR")
+			item = item:gsub("Race Reroll", "RaceR")
+			item = item:gsub("Trait Reroll", "TraitR")
+			item = item:gsub("Rush Key", "RushK")
+			item = item:gsub("Conqueror Fragment", "ConqF")
+			item = item:gsub("Worthiness Fragment", "WorthF")
+			item = item:gsub("Adamantite", "Adam")
+			table.insert(shortItems, item)
+		end
+		
+		local itemText = table.concat(shortItems, " - ")
 		if #importantItems > maxItems then
-			local shortList = {}
-			for i = 1, maxItems do
-				table.insert(shortList, importantItems[i])
-			end
-			message = message .. " - "..table.concat(shortList, " - ").." + "..(#importantItems - maxItems).." more"
-		else
-			message = message .. " - "..table.concat(importantItems, " - ")
+			itemText = itemText .. " +" .. (#importantItems - maxItems)
+		end
+		
+		message = message .. " - " .. itemText
+		
+		-- Truncate if still too long (max 150 chars total)
+		if #message > 150 then
+			message = message:sub(1, 147) .. "..."
 		end
 	elseif totalItems > 0 or #cratesList > 0 then
-		message = message .. " - 📋 Items: "..totalItems.." types"
+		message = message .. " - 📋 Items: "..totalItems
 	else
-		message = message .. " - 📋 Items: Loading..."
+		message = message .. " - 📋 Loading..."
 	end
 
 	local json = {
