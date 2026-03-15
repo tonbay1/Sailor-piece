@@ -386,18 +386,20 @@ while task.wait(1) do
 		Money = money,
 		Gems = gems,
 		Inventory = {
-			Crates = crateCount,
-			Secret = rarityCounts.Secret,
-			Mythical = rarityCounts.Mythical,
-			Legendary = rarityCounts.Legendary,
-			Epic = rarityCounts.Epic,
-			Rare = rarityCounts.Rare,
-			Uncommon = rarityCounts.Uncommon,
-			Common = rarityCounts.Common,
-			TotalTypes = totalItemTypes
+			Crates = #cratesList,
+			Secret = #itemLists.Secret,
+			Mythical = #itemLists.Mythical,
+			Legendary = #itemLists.Legendary,
+			Epic = #itemLists.Epic,
+			Rare = #itemLists.Rare,
+			Uncommon = #itemLists.Uncommon,
+			Common = #itemLists.Common,
+			TotalItems = totalItems
 		},
 		CratesDetail = cratesAndBoxes,
-		ItemsByRarity = inventoryByRarity
+		ItemsByRarity = inventoryByRarity,
+		CratesList = cratesList,
+		ItemLists = itemLists
 	}
 
 	local encoded = HttpService:JSONEncode(json)
