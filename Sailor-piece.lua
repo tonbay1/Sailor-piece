@@ -362,22 +362,22 @@ while task.wait(1) do
 	-- Add inventory summary to message (only show if we have items)
 	if totalItemTypes > 0 or crateCount > 0 then
 		if crateCount > 0 then
-			message = message .. " | Crates: "..crateCount
+			message = message .. " - Crates: "..crateCount
 		end
 		if rarityCounts.Secret > 0 then
-			message = message .. " | Secret: "..rarityCounts.Secret
+			message = message .. " - Secret: "..rarityCounts.Secret
 		end
 		if rarityCounts.Mythical > 0 then
-			message = message .. " | Mythical: "..rarityCounts.Mythical
+			message = message .. " - Mythical: "..rarityCounts.Mythical
 		end
 		if rarityCounts.Legendary > 0 then
-			message = message .. " | Legendary: "..rarityCounts.Legendary
+			message = message .. " - Legendary: "..rarityCounts.Legendary
 		end
 		if rarityCounts.Epic > 0 then
-			message = message .. " | Epic: "..rarityCounts.Epic
+			message = message .. " - Epic: "..rarityCounts.Epic
 		end
 	else
-		message = message .. " | Items: Loading..."
+		message = message .. " - Items: Loading..."
 	end
 
 	local json = {
