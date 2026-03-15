@@ -361,7 +361,7 @@ while task.wait(1) do
 	local gemsStr = gems >= 1000000 and string.format("%.1fM", gems/1000000) or 
 					gems >= 1000 and string.format("%.0fK", gems/1000) or tostring(gems)
 	
-	local message = "LVL "..level.." M "..moneyStr.." G "..gemsStr
+	local message = "⭐LVL "..level.." 💰"..moneyStr.." 💎"..gemsStr
 	print("[DEBUG] New message format:", message)
 	
 	-- New priority order: Aura > Clan Reroll > Race Reroll > Trait Reroll > Mythical Chest > Red items
@@ -413,7 +413,7 @@ while task.wait(1) do
 	for _, item in pairs(mythicalChestItems) do table.insert(allImportantItems, item) end
 	for _, item in pairs(redBorderItems) do table.insert(allImportantItems, item) end
 	
-	-- Show important items with proper formatting
+	-- Show important items with proper formatting and emojis
 	if #allImportantItems > 0 then
 		-- Limit to max 4 items for better display
 		local displayItems = {}
@@ -421,16 +421,33 @@ while task.wait(1) do
 		
 		for i = 1, math.min(maxItems, #allImportantItems) do
 			local item = allImportantItems[i]
-			-- Keep full names for Aura and Clan Reroll as requested
-			-- Only shorten other items
-			if not item:lower():find("aura") and not item:lower():find("clan reroll") then
-				item = item:gsub("Legendary Chest", "L.Chest")
+			local itemLower = item:lower()
+			local emoji = ""
+			
+			-- Add emoji based on item type
+			if itemLower:find("aura") then
+				emoji = "✨"
+			elseif itemLower:find("clan reroll") then
+				emoji = "🔄"
+			elseif itemLower:find("race reroll") then
+				emoji = "🎲"
 				item = item:gsub("Race Reroll", "RaceR")
+			elseif itemLower:find("trait reroll") then
+				emoji = "🎯"
 				item = item:gsub("Trait Reroll", "TraitR")
-				item = item:gsub("Rush Key", "RushK")
-				item = item:gsub("Worthiness Fragment", "WorthF")
+			elseif itemLower:find("mythical chest") then
+				emoji = "📦"
+			elseif itemLower:find("adamantite") then
+				emoji = "💚"
+			elseif itemLower:find("diamond") then
+				emoji = "💎"
+			elseif itemLower:find("conqueror fragment") then
+				emoji = "🔥"
+			else
+				emoji = "⚡"
 			end
-			table.insert(displayItems, item)
+			
+			table.insert(displayItems, emoji..item)
 		end
 		
 		local itemText = table.concat(displayItems, " ")
