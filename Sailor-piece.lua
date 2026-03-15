@@ -360,36 +360,49 @@ while task.wait(1) do
 	-- Filter and show only important items
 	local importantItems = {}
 	
-	-- Important crates
+	-- Important crates only
 	for _, crateInfo in pairs(cratesList) do
-		if crateInfo:find("Legendary Chest") or crateInfo:find("Mythical Chest") then
+		local crateName = crateInfo:lower()
+		if crateName:find("legendary chest") or crateName:find("mythical chest") then
 			table.insert(importantItems, "📦 "..crateInfo)
 		end
 	end
 	
-	-- Important items from all rarities
+	-- Important items only (be very specific)
 	for rarity, items in pairs(itemLists) do
 		for _, itemInfo in pairs(items) do
-			if itemInfo:find("Clan Reroll") or itemInfo:find("Race Reroll") or itemInfo:find("Trait Reroll") or 
-			   itemInfo:find("Rush Key") or itemInfo:find("Adamantite") or itemInfo:find("Mythril") or
-			   itemInfo:find("Aura") or itemInfo:find("Fragment") then
+			local itemName = itemInfo:lower()
+			-- Only these specific important items
+			if itemName:find("clan reroll") or itemName:find("race reroll") or itemName:find("trait reroll") or 
+			   itemName:find("rush key") or itemName:find("adamantite") or itemName:find("mythril") or
+			   itemName:find("aura") or itemName:find("fragment") then
 				local emoji = "🔥"
 				if rarity == "Secret" then emoji = "🌟"
 				elseif rarity == "Mythical" then emoji = "✨"
 				elseif rarity == "Legendary" then emoji = "🔥"
 				elseif rarity == "Epic" then emoji = "💜"
-				elseif rarity == "Rare" then emoji = "�"
+				elseif rarity == "Rare" then emoji = "💙"
 				end
 				table.insert(importantItems, emoji.." "..itemInfo)
 			end
 		end
 	end
 	
-	-- Add important items to message
+	-- Show only important items or summary
 	if #importantItems > 0 then
-		message = message .. " - "..table.concat(importantItems, " - ")
+		-- Limit to max 5 items to keep message short
+		local maxItems = 5
+		if #importantItems > maxItems then
+			local shortList = {}
+			for i = 1, maxItems do
+				table.insert(shortList, importantItems[i])
+			end
+			message = message .. " - "..table.concat(shortList, " - ").." + "..(#importantItems - maxItems).." more"
+		else
+			message = message .. " - "..table.concat(importantItems, " - ")
+		end
 	elseif totalItems > 0 or #cratesList > 0 then
-		message = message .. " - � Items: "..totalItems.." types"
+		message = message .. " - 📋 Items: "..totalItems.." types"
 	else
 		message = message .. " - 📋 Items: Loading..."
 	end
