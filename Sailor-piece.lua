@@ -355,75 +355,91 @@ while task.wait(1) do
 		table.insert(cratesList, crateName.." x"..quantity)
 	end
 
-	local message = "⭐ Level "..level.." 💰 Money "..money.." 💎 Gems "..gems
+	-- Format money and gems with K/M abbreviations
+	local moneyStr = money >= 1000000 and string.format("%.1fM", money/1000000) or 
+					 money >= 1000 and string.format("%.0fK", money/1000) or tostring(money)
+	local gemsStr = gems >= 1000000 and string.format("%.1fM", gems/1000000) or 
+					gems >= 1000 and string.format("%.0fK", gems/1000) or tostring(gems)
 	
-	-- Filter and show only important items
-	local importantItems = {}
+	local message = "LVL "..level.." M "..moneyStr.." G "..gemsStr
 	
-	-- Important crates only
+	-- Priority items (red border items from image)
+	local priorityItems = {}
+	local regularItems = {}
+	
+	-- Check crates - Mythical Chest is priority
 	for _, crateInfo in pairs(cratesList) do
 		local crateName = crateInfo:lower()
-		if crateName:find("legendary chest") or crateName:find("mythical chest") then
-			table.insert(importantItems, "📦 "..crateInfo)
+		if crateName:find("mythical chest") then
+			table.insert(priorityItems, crateInfo)
+		elseif crateName:find("legendary chest") then
+			table.insert(regularItems, crateInfo)
 		end
 	end
 	
-	-- Important items only (be very specific)
+	-- Check items by priority (red border items first)
 	for rarity, items in pairs(itemLists) do
 		for _, itemInfo in pairs(items) do
 			local itemName = itemInfo:lower()
-			-- Only these specific important items
-			if itemName:find("clan reroll") or itemName:find("race reroll") or itemName:find("trait reroll") or 
-			   itemName:find("rush key") or itemName:find("adamantite") or itemName:find("mythril") or
-			   itemName:find("aura") or itemName:find("fragment") then
-				local emoji = "🔥"
-				if rarity == "Secret" then emoji = "🌟"
-				elseif rarity == "Mythical" then emoji = "✨"
-				elseif rarity == "Legendary" then emoji = "🔥"
-				elseif rarity == "Epic" then emoji = "💜"
-				elseif rarity == "Rare" then emoji = "💙"
-				end
-				table.insert(importantItems, emoji.." "..itemInfo)
+			
+			-- Priority items (red border in image): Adamantite, Conqueror Fragment, Diamond, Mythical Chest
+			if itemName:find("adamantite") or itemName:find("conqueror fragment") or itemName:find("diamond") then
+				table.insert(priorityItems, itemInfo)
+			-- Keep full names for Aura and Clan Reroll
+			elseif itemName:find("aura") or itemName:find("clan reroll") then
+				table.insert(regularItems, itemInfo)
+			-- Other important items
+			elseif itemName:find("race reroll") or itemName:find("trait reroll") or 
+				   itemName:find("rush key") or itemName:find("mythril") or itemName:find("fragment") then
+				table.insert(regularItems, itemInfo)
 			end
 		end
 	end
 	
-	-- Show only important items or summary (keep very short)
-	if #importantItems > 0 then
-		-- Limit to max 3 items and shorten names
-		local shortItems = {}
-		local maxItems = 3
+	-- Combine priority and regular items
+	local allImportantItems = {}
+	for _, item in pairs(priorityItems) do
+		table.insert(allImportantItems, item)
+	end
+	for _, item in pairs(regularItems) do
+		table.insert(allImportantItems, item)
+	end
+	
+	-- Show important items with proper formatting
+	if #allImportantItems > 0 then
+		-- Limit to max 4 items for better display
+		local displayItems = {}
+		local maxItems = 4
 		
-		for i = 1, math.min(maxItems, #importantItems) do
-			local item = importantItems[i]
-			-- Shorten common item names
-			item = item:gsub("Legendary Chest", "L.Chest")
-			item = item:gsub("Mythical Chest", "M.Chest")
-			item = item:gsub("Clan Reroll", "ClanR")
-			item = item:gsub("Race Reroll", "RaceR")
-			item = item:gsub("Trait Reroll", "TraitR")
-			item = item:gsub("Rush Key", "RushK")
-			item = item:gsub("Conqueror Fragment", "ConqF")
-			item = item:gsub("Worthiness Fragment", "WorthF")
-			item = item:gsub("Adamantite", "Adam")
-			table.insert(shortItems, item)
+		for i = 1, math.min(maxItems, #allImportantItems) do
+			local item = allImportantItems[i]
+			-- Keep full names for Aura and Clan Reroll as requested
+			-- Only shorten other items
+			if not item:lower():find("aura") and not item:lower():find("clan reroll") then
+				item = item:gsub("Legendary Chest", "L.Chest")
+				item = item:gsub("Race Reroll", "RaceR")
+				item = item:gsub("Trait Reroll", "TraitR")
+				item = item:gsub("Rush Key", "RushK")
+				item = item:gsub("Worthiness Fragment", "WorthF")
+			end
+			table.insert(displayItems, item)
 		end
 		
-		local itemText = table.concat(shortItems, " - ")
-		if #importantItems > maxItems then
-			itemText = itemText .. " +" .. (#importantItems - maxItems)
+		local itemText = table.concat(displayItems, " ")
+		if #allImportantItems > maxItems then
+			itemText = itemText .. " +" .. (#allImportantItems - maxItems)
 		end
 		
-		message = message .. " - " .. itemText
+		message = message .. " " .. itemText
 		
-		-- Truncate if still too long (max 150 chars total)
-		if #message > 150 then
-			message = message:sub(1, 147) .. "..."
+		-- Truncate if still too long (max 180 chars total for better readability)
+		if #message > 180 then
+			message = message:sub(1, 177) .. "..."
 		end
 	elseif totalItems > 0 or #cratesList > 0 then
-		message = message .. " - 📋 Items: "..totalItems
+		message = message .. " Items: "..totalItems
 	else
-		message = message .. " - 📋 Loading..."
+		message = message .. " Loading..."
 	end
 
 	local json = {
