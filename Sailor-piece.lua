@@ -328,56 +328,54 @@ while task.wait(1) do
 	local money = (data:FindFirstChild("Money") and data.Money.Value) or 0
 	local gems = (data:FindFirstChild("Gems") and data.Gems.Value) or 0
 	
-	-- Count items by rarity (count unique item types, not quantities)
-	local rarityCounts = {
-		Secret = 0,
-		Mythical = 0,
-		Legendary = 0,
-		Epic = 0,
-		Rare = 0,
-		Uncommon = 0,
-		Common = 0
+	-- Build item lists by rarity
+	local itemLists = {
+		Secret = {},
+		Mythical = {},
+		Legendary = {},
+		Epic = {},
+		Rare = {},
+		Uncommon = {},
+		Common = {}
 	}
 	
-	local totalItemTypes = 0
+	local totalItems = 0
 	for rarity, items in pairs(inventoryByRarity) do
-		local count = 0
-		for itemName, quantity in pairs(items) do
-			count = count + 1
-			totalItemTypes = totalItemTypes + 1
-		end
-		if rarityCounts[rarity] then
-			rarityCounts[rarity] = count
+		if itemLists[rarity] then
+			for itemName, quantity in pairs(items) do
+				table.insert(itemLists[rarity], itemName.." x"..quantity)
+				totalItems = totalItems + 1
+			end
 		end
 	end
 	
-	-- Count crates/boxes types
-	local crateCount = 0
-	for _ in pairs(cratesAndBoxes) do
-		crateCount = crateCount + 1
+	-- Build crates list
+	local cratesList = {}
+	for crateName, quantity in pairs(cratesAndBoxes) do
+		table.insert(cratesList, crateName.." x"..quantity)
 	end
 
 	local message = "⭐ Level "..level.." 💰 Money "..money.." 💎 Gems "..gems
 	
-	-- Add inventory summary to message (only show if we have items)
-	if totalItemTypes > 0 or crateCount > 0 then
-		if crateCount > 0 then
-			message = message .. " - 📦 Crates: "..crateCount
+	-- Add inventory details to message (show actual item names)
+	if totalItems > 0 or #cratesList > 0 then
+		if #cratesList > 0 then
+			message = message .. " - 📦 "..table.concat(cratesList, ", ")
 		end
-		if rarityCounts.Secret > 0 then
-			message = message .. " - 🌟 Secret: "..rarityCounts.Secret
+		if #itemLists.Secret > 0 then
+			message = message .. " - 🌟 "..table.concat(itemLists.Secret, ", ")
 		end
-		if rarityCounts.Mythical > 0 then
-			message = message .. " - ✨ Mythical: "..rarityCounts.Mythical
+		if #itemLists.Mythical > 0 then
+			message = message .. " - ✨ "..table.concat(itemLists.Mythical, ", ")
 		end
-		if rarityCounts.Legendary > 0 then
-			message = message .. " - 🔥 Legendary: "..rarityCounts.Legendary
+		if #itemLists.Legendary > 0 then
+			message = message .. " - 🔥 "..table.concat(itemLists.Legendary, ", ")
 		end
-		if rarityCounts.Epic > 0 then
-			message = message .. " - 💜 Epic: "..rarityCounts.Epic
+		if #itemLists.Epic > 0 then
+			message = message .. " - 💜 "..table.concat(itemLists.Epic, ", ")
 		end
-		if rarityCounts.Rare > 0 then
-			message = message .. " - 💙 Rare: "..rarityCounts.Rare
+		if #itemLists.Rare > 0 then
+			message = message .. " - 💙 "..table.concat(itemLists.Rare, ", ")
 		end
 	else
 		message = message .. " - 📋 Items: Loading..."
