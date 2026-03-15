@@ -364,47 +364,54 @@ while task.wait(1) do
 	local message = "LVL "..level.." M "..moneyStr.." G "..gemsStr
 	print("[DEBUG] New message format:", message)
 	
-	-- Priority items (red border items from image)
-	local priorityItems = {}
-	local regularItems = {}
+	-- New priority order: Aura > Clan Reroll > Race Reroll > Trait Reroll > Mythical Chest > Red items
+	local auraItems = {}
+	local clanRerollItems = {}
+	local raceRerollItems = {}
+	local traitRerollItems = {}
+	local mythicalChestItems = {}
+	local redBorderItems = {}
 	
-	-- Check crates - Mythical Chest is priority
+	-- Check crates
 	for _, crateInfo in pairs(cratesList) do
 		local crateName = crateInfo:lower()
 		if crateName:find("mythical chest") then
-			table.insert(priorityItems, crateInfo)
-		elseif crateName:find("legendary chest") then
-			table.insert(regularItems, crateInfo)
+			table.insert(mythicalChestItems, crateInfo)
 		end
 	end
 	
-	-- Check items by priority (red border items first)
+	-- Check items by new priority order
 	for rarity, items in pairs(itemLists) do
 		for _, itemInfo in pairs(items) do
 			local itemName = itemInfo:lower()
 			
-			-- Priority items (red border in image): Adamantite, Conqueror Fragment, Diamond, Mythical Chest
-			if itemName:find("adamantite") or itemName:find("conqueror fragment") or itemName:find("diamond") then
-				table.insert(priorityItems, itemInfo)
-			-- Keep full names for Aura and Clan Reroll
-			elseif itemName:find("aura") or itemName:find("clan reroll") then
-				table.insert(regularItems, itemInfo)
-			-- Other important items
-			elseif itemName:find("race reroll") or itemName:find("trait reroll") or 
-				   itemName:find("rush key") or itemName:find("mythril") or itemName:find("fragment") then
-				table.insert(regularItems, itemInfo)
+			-- Priority 1: Aura (highest priority)
+			if itemName:find("aura") then
+				table.insert(auraItems, itemInfo)
+			-- Priority 2: Clan Reroll
+			elseif itemName:find("clan reroll") then
+				table.insert(clanRerollItems, itemInfo)
+			-- Priority 3: Race Reroll
+			elseif itemName:find("race reroll") then
+				table.insert(raceRerollItems, itemInfo)
+			-- Priority 4: Trait Reroll
+			elseif itemName:find("trait reroll") then
+				table.insert(traitRerollItems, itemInfo)
+			-- Priority 6: Red border items (Adamantite, Conqueror Fragment, Diamond)
+			elseif itemName:find("adamantite") or itemName:find("conqueror fragment") or itemName:find("diamond") then
+				table.insert(redBorderItems, itemInfo)
 			end
 		end
 	end
 	
-	-- Combine priority and regular items
+	-- Combine in priority order
 	local allImportantItems = {}
-	for _, item in pairs(priorityItems) do
-		table.insert(allImportantItems, item)
-	end
-	for _, item in pairs(regularItems) do
-		table.insert(allImportantItems, item)
-	end
+	for _, item in pairs(auraItems) do table.insert(allImportantItems, item) end
+	for _, item in pairs(clanRerollItems) do table.insert(allImportantItems, item) end
+	for _, item in pairs(raceRerollItems) do table.insert(allImportantItems, item) end
+	for _, item in pairs(traitRerollItems) do table.insert(allImportantItems, item) end
+	for _, item in pairs(mythicalChestItems) do table.insert(allImportantItems, item) end
+	for _, item in pairs(redBorderItems) do table.insert(allImportantItems, item) end
 	
 	-- Show important items with proper formatting
 	if #allImportantItems > 0 then
