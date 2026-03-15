@@ -362,6 +362,7 @@ while task.wait(1) do
 					gems >= 1000 and string.format("%.0fK", gems/1000) or tostring(gems)
 	
 	local message = "LVL "..level.." M "..moneyStr.." G "..gemsStr
+	print("[DEBUG] New message format:", message)
 	
 	-- Priority items (red border items from image)
 	local priorityItems = {}
