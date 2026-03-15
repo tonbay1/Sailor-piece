@@ -317,31 +317,18 @@ end
 local data = player:WaitForChild("Data",10)
 if not data then return end
 
-local levelValue = data:FindFirstChild("Level")
-local moneyValue = data:FindFirstChild("Money")
-local gemsValue = data:FindFirstChild("Gems")
-
-local lastText = ""
+-- Wait for inventory data to load first
+task.wait(5)
+print("[HORST] Starting Horst Display with inventory tracking...")
 
 while task.wait(1) do
 
-	local level = 0
-	local money = 0
-	local gems = 0
-
-	if levelValue then
-		level = levelValue.Value
-	end
-
-	if moneyValue then
-		money = moneyValue.Value
-	end
+	-- Get current values directly
+	local level = (data:FindFirstChild("Level") and data.Level.Value) or 0
+	local money = (data:FindFirstChild("Money") and data.Money.Value) or 0
+	local gems = (data:FindFirstChild("Gems") and data.Gems.Value) or 0
 	
-	if gemsValue then
-		gems = gemsValue.Value
-	end
-	
-	-- Count items by rarity
+	-- Count items by rarity (count unique item types, not quantities)
 	local rarityCounts = {
 		Secret = 0,
 		Mythical = 0,
@@ -352,13 +339,19 @@ while task.wait(1) do
 		Common = 0
 	}
 	
+	local totalItemTypes = 0
 	for rarity, items in pairs(inventoryByRarity) do
+		local count = 0
 		for itemName, quantity in pairs(items) do
-			rarityCounts[rarity] = rarityCounts[rarity] + 1
+			count = count + 1
+			totalItemTypes = totalItemTypes + 1
+		end
+		if rarityCounts[rarity] then
+			rarityCounts[rarity] = count
 		end
 	end
 	
-	-- Count crates/boxes
+	-- Count crates/boxes types
 	local crateCount = 0
 	for _ in pairs(cratesAndBoxes) do
 		crateCount = crateCount + 1
@@ -366,18 +359,25 @@ while task.wait(1) do
 
 	local message = " Level "..level.." Money "..money.." Gems "..gems
 	
-	-- Add inventory summary to message
-	if crateCount > 0 then
-		message = message .. " | Crates: "..crateCount
-	end
-	if rarityCounts.Secret > 0 then
-		message = message .. " | Secret: "..rarityCounts.Secret
-	end
-	if rarityCounts.Mythical > 0 then
-		message = message .. " | Mythical: "..rarityCounts.Mythical
-	end
-	if rarityCounts.Legendary > 0 then
-		message = message .. " | Legendary: "..rarityCounts.Legendary
+	-- Add inventory summary to message (only show if we have items)
+	if totalItemTypes > 0 or crateCount > 0 then
+		if crateCount > 0 then
+			message = message .. " | Crates: "..crateCount
+		end
+		if rarityCounts.Secret > 0 then
+			message = message .. " | Secret: "..rarityCounts.Secret
+		end
+		if rarityCounts.Mythical > 0 then
+			message = message .. " | Mythical: "..rarityCounts.Mythical
+		end
+		if rarityCounts.Legendary > 0 then
+			message = message .. " | Legendary: "..rarityCounts.Legendary
+		end
+		if rarityCounts.Epic > 0 then
+			message = message .. " | Epic: "..rarityCounts.Epic
+		end
+	else
+		message = message .. " | Items: Loading..."
 	end
 
 	local json = {
@@ -392,7 +392,8 @@ while task.wait(1) do
 			Epic = rarityCounts.Epic,
 			Rare = rarityCounts.Rare,
 			Uncommon = rarityCounts.Uncommon,
-			Common = rarityCounts.Common
+			Common = rarityCounts.Common,
+			TotalTypes = totalItemTypes
 		},
 		CratesDetail = cratesAndBoxes,
 		ItemsByRarity = inventoryByRarity
