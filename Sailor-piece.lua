@@ -385,9 +385,14 @@ while not player do
 	player = Players.LocalPlayer
 end
 
--- รอ Data
-local data = player:WaitForChild("Data",10)
-if not data then return end
+-- รอ Data (เพิ่มเวลารอเป็น 30 วินาที)
+local data = player:WaitForChild("Data", 30)
+if not data then 
+	print("[HORST] ❌ ERROR: Data not found after 30s!")
+	return 
+end
+
+print("[HORST] ✅ Data loaded successfully")
 
 -- Wait for inventory data to load first
 task.wait(5)
@@ -400,28 +405,28 @@ while task.wait(1) do
 	local money = (data:FindFirstChild("Money") and data.Money.Value) or 0
 	local gems = (data:FindFirstChild("Gems") and data.Gems.Value) or 0
 	
-	-- Check Haki status (เช็คจาก HakiProgressionFrame.Visible)
-	local hasHaki = false
-	local hakiLevel = "N/A"
+	-- Check Haki status (safe version - won't break if error)
+	local hakiStatus = "❌"
 	pcall(function()
 		local statsUI = player.PlayerGui:FindFirstChild("StatsPanelUI")
 		if statsUI then
 			for _, desc in pairs(statsUI:GetDescendants()) do
 				if desc.Name == "HakiProgressionFrame" and desc.Visible == true then
-					hasHaki = true
+					-- Found Haki!
 					for _, child in pairs(desc:GetDescendants()) do
 						if child.Name == "HakiLevel" and child:IsA("TextLabel") then
-							hakiLevel = child.Text
+							hakiStatus = "✅ " .. child.Text
 							break
 						end
+					end
+					if hakiStatus == "❌" then
+						hakiStatus = "✅ Haki"
 					end
 					break
 				end
 			end
 		end
 	end)
-	
-	local hakiStatus = hasHaki and "✅ "..hakiLevel or "❌ No Haki"
 	
 	-- Build item lists by rarity
 	local itemLists = {
@@ -456,8 +461,8 @@ while task.wait(1) do
 	local gemsStr = gems >= 1000000 and string.format("%.1fM", gems/1000000) or 
 					gems >= 1000 and string.format("%.0fK", gems/1000) or tostring(gems)
 	
-	local message = hakiStatus.." | ⭐LVL "..level.." 💰"..moneyStr.." 💎"..gemsStr
-	print("[DEBUG] New message format:", message)
+	local message = hakiStatus.." ⭐LVL "..level.." 💰"..moneyStr.." 💎"..gemsStr
+	print("[HORST]", message)
 	
 	-- New priority order: Aura > Clan Reroll > Race Reroll > Trait Reroll > Mythical Chest > Red items
 	local auraItems = {}
@@ -1911,40 +1916,27 @@ task.spawn(function()
                 if darkBladeInHand then break end
             end
             
-            -- ถ้ายังไม่มีใน Backpack/Character → RequestInventory + EquipWeapon (retry 3 ครั้ง)
+            -- ถ้ายังไม่มีใน Backpack/Character → ลองเรียก EquipWeapon ดึงจาก Inventory
             if not darkBladeInHand then
-                print("[FARM] No Dark Blade in hand, loading from Inventory...")
-                
-                -- เรียก RequestInventory ก่อนเพื่อให้ server โหลด inventory
+                print("[FARM] No Dark Blade in hand, trying EquipWeapon...")
                 pcall(function()
-                    RS:WaitForChild("Remotes"):WaitForChild("RequestInventory"):FireServer()
+                    RS:WaitForChild("Remotes"):WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", "Dark Blade"}))
                 end)
-                task.wait(1)
+                task.wait(2)
                 
-                -- ลอง EquipWeapon สูงสุด 3 ครั้ง
-                for attempt = 1, 3 do
-                    pcall(function()
-                        RS:WaitForChild("Remotes"):WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", "Dark Blade"}))
-                    end)
-                    task.wait(2)
-                    
-                    -- เช็คว่าดาบเข้ามาหรือยัง
-                    for _, container in pairs({player.Character, player.Backpack}) do
-                        if container then
-                            for _, tool in pairs(container:GetChildren()) do
-                                if tool:IsA("Tool") and (tool.Name:find("Dark Blade") or tool.ToolTip == "Black Blade") then
-                                    darkBladeInHand = true
-                                    toolName = "Dark Blade"
-                                    print("[FARM] ✅ Dark Blade equipped! (attempt", attempt .. ")")
-                                    break
-                                end
+                -- เช็คอีกรอบ
+                for _, container in pairs({player.Character, player.Backpack}) do
+                    if container then
+                        for _, tool in pairs(container:GetChildren()) do
+                            if tool:IsA("Tool") and (tool.Name:find("Dark Blade") or tool.ToolTip == "Black Blade") then
+                                darkBladeInHand = true
+                                toolName = "Dark Blade"
+                                print("[FARM] ✅ Dark Blade equipped from Inventory!")
+                                break
                             end
                         end
-                        if darkBladeInHand then break end
                     end
-                    
                     if darkBladeInHand then break end
-                    print("[FARM] Attempt", attempt, "failed, retrying...")
                 end
             end
             
@@ -1982,22 +1974,9 @@ task.spawn(function()
             end
         
             if not closest then
-                print("[FARM] ❌ NPC not found:", npcType, "- Waiting for respawn...")
-                task.wait(5) -- รอ NPC respawn ที่จุดเดิม ไม่ teleport ซ้ำ
-                
-                -- เช็คอีกรอบก่อน teleport ใหม่
-                for _, v in pairs(workspace.NPCs:GetChildren()) do
-                    if v:IsA("Model") and v:FindFirstChild("HumanoidRootPart") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                        local subName = v.Humanoid.DisplayName:gsub("%s+", ""):gsub("%[Lv%.%s*%d+%]", "")
-                        if npcType == tostring(subName) or v.Name == npcType or subName:find(npcType, 1, true) or v.Name:find(npcType, 1, true) then
-                            closest = v
-                            print("[FARM] ✅ NPC spawned after waiting:", v.Name)
-                            break
-                        end
-                    end
-                end
-                
-                if not closest then continue end
+                print("[FARM] ❌ NPC not found:", npcType, "- Waiting...")
+                task.wait(2)
+                continue
             end
 
             print("Found target NPC:", closest.Name)
