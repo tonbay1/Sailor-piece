@@ -1409,6 +1409,12 @@ end
 local function buyDarkBlade()
     print("[WEAPON PURCHASE] ========== BUYING DARK BLADE ==========")
     
+    local player = game.Players.LocalPlayer
+    if not player then
+        print("[WEAPON PURCHASE] ❌ ERROR: LocalPlayer not found!")
+        return false
+    end
+    
     -- เช็คว่ามีใน Backpack/Character แล้วหรือยัง
     if checkOwnerDarkBlade() then
         print("[WEAPON PURCHASE] ✅ Dark Blade already in Backpack! Just equipping...")
