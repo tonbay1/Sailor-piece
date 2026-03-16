@@ -9,6 +9,78 @@ end)
 
 	local player = Players.LocalPlayer
 
+	-- ปิดการแสดง error messages ทั้งหมดอย่างสมบูรณ์
+	local oldError = error
+	local oldWarn = warn
+	local oldPrint = print
+	
+	-- Override ทุก output functions
+	error = function() end
+	warn = function() end
+	
+	-- ปิด ScriptContext errors
+	pcall(function()
+		game:GetService("ScriptContext").Error:Connect(function() end)
+	end)
+	
+	-- ปิด LogService
+	pcall(function()
+		game:GetService("LogService").MessageOut:Connect(function() end)
+	end)
+	
+	-- ปิด TestService output
+	pcall(function()
+		game:GetService("TestService").Error:Connect(function() end)
+		game:GetService("TestService").ServerOutput:Connect(function() end)
+	end)
+	
+	-- Override print function อย่างสมบูรณ์
+	print = function(...)
+		local args = {...}
+		if not args[1] then return end
+		
+		local text = tostring(args[1])
+		
+		-- บล็อค error messages ทั้งหมด
+		local blockedKeywords = {
+			"Error", "error", "ERROR",
+			"Stack", "stack", "STACK", 
+			"attempt to call", "attempt to index",
+			"CrossExperience", "CorePackages",
+			"DEBUG", "Script", "nil value",
+			"ServerScriptService", "ReplicatedStorage",
+			"Workspace", "Players"
+		}
+		
+		for _, keyword in ipairs(blockedKeywords) do
+			if string.find(text, keyword) then
+				return -- ไม่แสดงเลย
+			end
+		end
+		
+		-- แสดงเฉพาะ log ที่เราต้องการ
+		if string.find(text, "%[HAKI") or string.find(text, "%[SYSTEM%]") or 
+		   string.find(text, "%[FARM%]") or string.find(text, "%[WEAPON%]") then
+			oldPrint(...)
+		end
+	end
+	
+	-- ปิด output ทั้งหมดจาก console
+	pcall(function()
+		local mt = getrawmetatable(game)
+		local oldNamecall = mt.__namecall
+		
+		setreadonly(mt, false)
+		mt.__namecall = function(self, ...)
+			local method = getnamecallmethod()
+			if method == "print" or method == "warn" or method == "error" then
+				return
+			end
+			return oldNamecall(self, ...)
+		end
+		setreadonly(mt, true)
+	end)
+
 	-- ปิด setting ลดแลค
 	local SettingsToggle = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("SettingsToggle")
 
@@ -328,6 +400,29 @@ while task.wait(1) do
 	local money = (data:FindFirstChild("Money") and data.Money.Value) or 0
 	local gems = (data:FindFirstChild("Gems") and data.Gems.Value) or 0
 	
+	-- Check Haki status (เช็คจาก HakiProgressionFrame.Visible)
+	local hasHaki = false
+	local hakiLevel = "N/A"
+	pcall(function()
+		local statsUI = player.PlayerGui:FindFirstChild("StatsPanelUI")
+		if statsUI then
+			for _, desc in pairs(statsUI:GetDescendants()) do
+				if desc.Name == "HakiProgressionFrame" and desc.Visible == true then
+					hasHaki = true
+					for _, child in pairs(desc:GetDescendants()) do
+						if child.Name == "HakiLevel" and child:IsA("TextLabel") then
+							hakiLevel = child.Text
+							break
+						end
+					end
+					break
+				end
+			end
+		end
+	end)
+	
+	local hakiStatus = hasHaki and "✅ "..hakiLevel or "❌ No Haki"
+	
 	-- Build item lists by rarity
 	local itemLists = {
 		Secret = {},
@@ -361,7 +456,7 @@ while task.wait(1) do
 	local gemsStr = gems >= 1000000 and string.format("%.1fM", gems/1000000) or 
 					gems >= 1000 and string.format("%.0fK", gems/1000) or tostring(gems)
 	
-	local message = "⭐LVL "..level.." 💰"..moneyStr.." 💎"..gemsStr
+	local message = hakiStatus.." | ⭐LVL "..level.." 💰"..moneyStr.." 💎"..gemsStr
 	print("[DEBUG] New message format:", message)
 	
 	-- New priority order: Aura > Clan Reroll > Race Reroll > Trait Reroll > Mythical Chest > Red items
@@ -538,14 +633,81 @@ end
 end)
 
 
--- auto stat
-task.spawn(function()
-while task.wait(1) do
+-- Auto stat allocation - Sword 50%, Defense 30%, Power 20%
+local function allocateStat(statName, amount)
 	pcall(function()
-	statRemote:FireServer("Melee",2)
-	statRemote:FireServer("Defense",1)
-end)
+		for i = 1, amount do
+			statRemote:FireServer(statName, 1)
+			task.wait(0.05)
+		end
+	end)
 end
+
+local function autoAllocate()
+	local points = 0
+	pcall(function()
+		points = player.Data.StatPoints.Value or 0
+	end)
+	
+	if points <= 0 then return end
+	
+	print("[AUTO STATS] Stat points available:", points)
+	
+	-- อัพแบบสลับกัน: Sword 3, Defense 2, Power 1 (รวม 6 points ต่อรอบ)
+	-- สัดส่วน: Sword 50%, Defense 30%, Power 20%
+	local swordTotal = 0
+	local defenseTotal = 0
+	local powerTotal = 0
+	
+	while points > 0 do
+		-- รอบละ 6 points: Sword 3, Defense 2, Power 1
+		
+		-- อัพ Sword 3 points (หรือน้อยกว่าถ้า points เหลือน้อย)
+		local swordNow = math.min(3, points)
+		if swordNow > 0 then
+			pcall(function()
+				statRemote:FireServer("Sword", swordNow)
+			end)
+			points = points - swordNow
+			swordTotal = swordTotal + swordNow
+			task.wait(0.1)
+		end
+		
+		if points <= 0 then break end
+		
+		-- อัพ Defense 2 points
+		local defenseNow = math.min(2, points)
+		if defenseNow > 0 then
+			pcall(function()
+				statRemote:FireServer("Defense", defenseNow)
+			end)
+			points = points - defenseNow
+			defenseTotal = defenseTotal + defenseNow
+			task.wait(0.1)
+		end
+		
+		if points <= 0 then break end
+		
+		-- อัพ Power 1 point
+		local powerNow = math.min(1, points)
+		if powerNow > 0 then
+			pcall(function()
+				statRemote:FireServer("Power", powerNow)
+			end)
+			points = points - powerNow
+			powerTotal = powerTotal + powerNow
+			task.wait(0.1)
+		end
+	end
+	
+	print("[AUTO STATS] ✅ Allocated: Sword +" .. swordTotal .. ", Defense +" .. defenseTotal .. ", Power +" .. powerTotal)
+end
+
+-- เรียกใช้ autoAllocate ทุก 5 วินาที
+task.spawn(function()
+	while task.wait(5) do
+		pcall(autoAllocate)
+	end
 end)
 
 -- Auto Open Lucky Boxes
@@ -915,10 +1077,798 @@ task.spawn(function()
 end)
 --]]
 
+-- ==================== HAKI QUEST CONFIG ====================
+local HAKI_QUEST_CONFIG = {
+    ENABLED = true,                     -- เปิด/ปิด Haki Quest
+    TARGET_KILLS = 150,                 -- เป้าหมาย 150 ตัว
+    USE_ONLY_PUNCH = true,              -- ใช้แค่หมัดปกติ
+    CHECK_PROGRESS = true,              -- เช็คความคืบหน้า
+    HAKI_QUEST_NPC = "HakiQuestNPC",   -- ชื่อ NPC ที่รับภารกิจ
+    TARGET_NPC = "Thief",              -- NPC ที่ต้องตี
+}
+-- ==========================================================
+
+-- Haki Quest System
+local function acceptHakiQuest()
+    print("[HAKI QUEST] Accepting Haki quest from HakiQuestNPC...")
+    
+    local hakiNPCPos = Vector3.new(-497.94, 23.66, -1252.64)
+    local char = player.Character
+    local VIM = game:GetService("VirtualInputManager")
+    
+    -- เช็คว่ามีภารกิจหลักอยู่หรือไม่ ถ้ามีและไม่ใช่ Haki quest ให้ยกเลิกก่อน
+    pcall(function()
+        local questUI = player.PlayerGui:FindFirstChild("QuestUI")
+        if questUI and questUI:FindFirstChild("Quest") and questUI.Quest.Visible then
+            local currentTitle = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text
+            print("[HAKI QUEST] Current quest:", currentTitle)
+            
+            if not currentTitle:find("Path to Haki") then
+                print("[HAKI QUEST] ⚠️ Has non-Haki quest! Abandoning:", currentTitle)
+                abandonRemote:FireServer("repeatable")
+                task.wait(2)
+                print("[HAKI QUEST] ✅ Quest abandoned!")
+            else
+                print("[HAKI QUEST] Already has Haki quest, no need to abandon")
+                return
+            end
+        end
+    end)
+    
+    -- Teleport ไป HakiQuestNPC
+    tweenPos(CFrame.new(hakiNPCPos))
+    task.wait(2)
+    
+    -- รับภารกิจผ่าน RemoteEvent (ไม่ใช้ E key)
+    print("[HAKI QUEST] Accepting quest via RemoteEvent...")
+    pcall(function()
+        questRemote:FireServer("HakiQuestNPC")
+    end)
+    task.wait(2)
+    
+    -- เช็คว่าภารกิจที่รับมาคืออะไร
+    task.wait(1)
+    pcall(function()
+        local questUI = player.PlayerGui:FindFirstChild("QuestUI")
+        if questUI and questUI:FindFirstChild("Quest") and questUI.Quest.Visible then
+            local questTitle = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text
+            local questDesc = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestDescription.Text
+            print("[HAKI QUEST] ========================================")
+            print("[HAKI QUEST] Quest Title:", questTitle)
+            print("[HAKI QUEST] Description:", questDesc)
+            print("[HAKI QUEST] ========================================")
+        else
+            print("[HAKI QUEST] QuestUI not visible after accepting")
+        end
+    end)
+end
+
+local function checkHakiProgress()
+    -- เช็คความคืบหน้าภารกิจ Haki
+    local questUI = player.PlayerGui:FindFirstChild("QuestUI")
+    if questUI and questUI.Quest.Visible then
+        print("[HAKI QUEST] ========== QUEST STATUS ==========")
+        
+        local questTitle = ""
+        local questDesc = ""
+        local progressText = ""
+        local isCompleted = false
+        
+        -- เช็คชื่อภารกิจ
+        pcall(function()
+            questTitle = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text
+            print("[HAKI QUEST] Quest Title:", questTitle)
+        end)
+        
+        -- เช็ครายละเอียดภารกิจ
+        pcall(function()
+            questDesc = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestDescription.Text
+            print("[HAKI QUEST] Description:", questDesc)
+        end)
+        
+        -- เช็คความคืบหน้าหลายวิธี
+        pcall(function()
+            -- วิธีที่ 3: หาใน QuestInfo ทั้งหมด
+            for _, child in pairs(questUI.Quest.Quest.Holder.Content.QuestInfo:GetChildren()) do
+                if child:IsA("TextLabel") and string.find(child.Text, "/") then
+                    progressText = child.Text
+                    print("[HAKI QUEST] Progress:", child.Name, "=", progressText)
+                    
+                    -- เช็คว่าเสร็จแล้วหรือไม่
+                    local current, total = progressText:match("(%d+)/(%d+)")
+                    if current and total and tonumber(current) >= tonumber(total) then
+                        isCompleted = true
+                        print("[HAKI QUEST] ✅ QUEST COMPLETED! (" .. current .. "/" .. total .. ")")
+                    end
+                end
+            end
+        end)
+        
+        print("[HAKI QUEST] ================================")
+        
+        -- ถ้าภารกิจเสร็จแล้ว ต้อง teleport ไปส่งภารกิจที่ HakiQuestNPC
+        if isCompleted then
+            print("[HAKI QUEST] 🎉 Quest completed! Teleporting to HakiQuestNPC to turn in...")
+            
+            -- Teleport ไป HakiQuestNPC
+            local hakiNPCPos = Vector3.new(-497.94, 23.66, -1252.64)
+            tweenPos(CFrame.new(hakiNPCPos))
+            task.wait(3)
+            
+            -- รับภารกิจใหม่ (ส่งภารกิจเก่า + รับใหม่)
+            print("[HAKI QUEST] Turning in quest and accepting new one...")
+            pcall(acceptHakiQuest)
+            task.wait(3)
+            
+            -- เช็คว่าได้ Haki แล้วหรือยัง
+            local hasHaki = pcall(checkHakiStatus)
+            
+            return isCompleted
+        end
+        
+        return isCompleted
+    else
+        print("[HAKI QUEST] No quest UI visible - Teleporting to HakiQuestNPC...")
+        
+        -- Teleport ไป HakiQuestNPC
+        local hakiNPCPos = Vector3.new(-497.94, 23.66, -1252.64)
+        tweenPos(CFrame.new(hakiNPCPos))
+        task.wait(3)
+        
+        -- รับภารกิจใหม่
+        pcall(acceptHakiQuest)
+        task.wait(3)
+        pcall(checkHakiStatus)
+        
+        return true
+    end
+end
+
+local function checkHakiStatus()
+    print("[HAKI STATUS] ========== CHECKING HAKI STATUS ==========")
+
+    local hasHaki = false
+    local hakiInfo = ""
+
+    -- วิธีที่ 1: เช็ค HakiProgressionFrame.Visible (ถ้า Visible = true แสดงว่ามี Haki)
+    pcall(function()
+        local statsUI = player.PlayerGui:FindFirstChild("StatsPanelUI")
+        if statsUI then
+            for _, desc in pairs(statsUI:GetDescendants()) do
+                if desc.Name == "HakiProgressionFrame" and desc.Visible == true then
+                    -- Frame visible = มี Haki จริง
+                    hasHaki = true
+                    print("[HAKI STATUS] ✅ HakiProgressionFrame is visible!")
+                    
+                    -- หา HakiLevel text
+                    for _, child in pairs(desc:GetDescendants()) do
+                        if child.Name == "HakiLevel" and child:IsA("TextLabel") then
+                            hakiInfo = child.Text
+                            print("[HAKI STATUS] ✅ HakiLevel:", hakiInfo)
+                            break
+                        end
+                    end
+                    break
+                end
+            end
+        end
+    end)
+    
+    if hasHaki then
+        print("[HAKI STATUS] ✅ Player HAS Haki!", hakiInfo)
+        _G.HAKI_QUEST_MODE = false
+        HAKI_QUEST_CONFIG.ENABLED = false
+    else
+        print("[HAKI STATUS] ❌ Player doesn't have Haki yet")
+    end
+    
+    print("[HAKI STATUS] ================================")
+    return hasHaki
+end
+
+-- เช็คว่ามี Dark Blade ใน Inventory (ผ่าน Remote) - เหมือน v3
+local function checkDarkBlade(targetName)
+    targetName = targetName or "Dark Blade"
+    local RS = game:GetService("ReplicatedStorage")
+    local result = false
+    
+    local conn
+    conn = RS.Remotes.UpdateInventory.OnClientEvent:Connect(function(tab, data)
+        for _, item in pairs(data) do
+            if item.name == targetName then
+                result = true
+            end
+        end
+    end)
+    
+    RS.Remotes.RequestInventory:FireServer()
+    task.wait(1) -- รอให้ทุก tab มาครบ (Items, Melee, Sword, Power, etc.)
+    
+    pcall(function() conn:Disconnect() end)
+    
+    return result
+end
+
+-- เช็คว่า Dark Blade อยู่ใน Backpack/Character แล้ว (เช็คตรงๆ ไม่เรียก RequestInventory)
+local function checkOwnerDarkBlade()
+    local has = false
+    pcall(function()
+        for _, container in pairs({player.Backpack, player.Character}) do
+            for _, tool in pairs(container:GetChildren()) do
+                if tool:IsA("Tool") then
+                    local name = tool.Name or ""
+                    local tooltip = tool.ToolTip or ""
+                    if tooltip == "Black Blade" or name:find("Dark Blade") then
+                        has = true
+                        print("[CHECK] ✅ Dark Blade found in", container.Name, ":", name)
+                        return
+                    end
+                end
+            end
+        end
+    end)
+    return has
+end
+
+-- Equip Dark Blade จาก Inventory → Backpack/Character
+local function equipDarkBlade()
+    print("[EQUIP] Equipping Dark Blade...")
+    pcall(function()
+        local RS = game:GetService("ReplicatedStorage")
+        RS:WaitForChild("Remotes"):WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", "Dark Blade"}))
+    end)
+    task.wait(1)
+    
+    -- เช็คว่า Equip สำเร็จ
+    if checkOwnerDarkBlade() then
+        print("[EQUIP] ✅ Dark Blade equipped!")
+        return true
+    else
+        print("[EQUIP] ❌ Failed to equip")
+        return false
+    end
+end
+
+local function resetStats()
+    print("[STATS] ========== RESETTING STATS ==========")
+    
+    pcall(function()
+        local resetRemote = ReplicatedStorage:FindFirstChild("RemoteEvents"):FindFirstChild("ResetStats")
+        if resetRemote then
+            print("[STATS] Resetting all stats...")
+            resetRemote:FireServer()
+            task.wait(2)
+            print("[STATS] ✅ Stats reset successfully!")
+        else
+            print("[STATS] ❌ ResetStats remote not found")
+        end
+    end)
+    
+    print("[STATS] ================================")
+end
+
+local function upgradeStats()
+    print("[STATS] ========== UPGRADING STATS ==========")
+    
+    -- เช็คจำนวน Stat Points ที่มี
+    local totalStatPoints = 0
+    pcall(function()
+        totalStatPoints = player.Data.StatPoints.Value or 0
+    end)
+    
+    print("[STATS] Total Stat Points available:", totalStatPoints)
+    
+    -- แบ่งสเตตัสตามเปอร์เซ็นต์: Sword 50%, Defense 30%, Power 20%
+    local swordPoints = math.floor(totalStatPoints * 0.50)
+    local defensePoints = math.floor(totalStatPoints * 0.30)
+    local powerPoints = math.floor(totalStatPoints * 0.20)
+    
+    local statsToUpgrade = {
+        {name = "Sword", amount = swordPoints},
+        {name = "Defense", amount = defensePoints},
+        {name = "Power", amount = powerPoints}
+    }
+    
+    print("[STATS] Distribution: Sword", swordPoints, "(50%), Defense", defensePoints, "(30%), Power", powerPoints, "(20%)")
+    
+    pcall(function()
+        local updateRemote = ReplicatedStorage:FindFirstChild("RemoteEvents"):FindFirstChild("UpdatePlayerStats")
+        
+        if updateRemote then
+            for _, stat in ipairs(statsToUpgrade) do
+                if stat.amount > 0 then
+                    print("[STATS] Upgrading", stat.name, "by", stat.amount, "points...")
+                    
+                    for i = 1, stat.amount do
+                        pcall(function()
+                            updateRemote:FireServer(stat.name, 1)
+                        end)
+                        task.wait(0.1) -- รอเล็กน้อยระหว่างอัพแต่ละครั้ง
+                    end
+                    
+                    print("[STATS] ✅", stat.name, "upgraded!")
+                    task.wait(0.5)
+                end
+            end
+            
+            print("[STATS] ✅ All stats upgraded successfully!")
+            print("[STATS] Final: Sword +" .. swordPoints .. ", Defense +" .. defensePoints .. ", Power +" .. powerPoints)
+        else
+            print("[STATS] ❌ UpdatePlayerStats remote not found")
+        end
+    end)
+    
+    print("[STATS] ================================")
+end
+
+local function buyDarkBlade()
+    print("[WEAPON PURCHASE] ========== BUYING DARK BLADE ==========")
+    
+    -- เช็คว่ามีใน Backpack/Character แล้วหรือยัง
+    if checkOwnerDarkBlade() then
+        print("[WEAPON PURCHASE] ✅ Dark Blade already in Backpack! Just equipping...")
+        equipDarkBlade()
+        print("[WEAPON PURCHASE] ================================")
+        return true
+    end
+    
+    -- เช็คว่ามีใน Inventory หรือไม่ (ยังไม่ได้ Equip)
+    print("[WEAPON PURCHASE] Checking Inventory...")
+    local hasInInventory = false
+    pcall(function()
+        local RS = game:GetService("ReplicatedStorage")
+        RS:WaitForChild("Remotes"):WaitForChild("RequestInventory"):FireServer()
+        task.wait(3) -- รอให้ Inventory โหลดเสร็จ
+        
+        -- เช็คว่ามี Dark Blade ใน Inventory
+        for _, tool in pairs(player.Backpack:GetChildren()) do
+            if tool:IsA("Tool") and (tool.Name:find("Dark Blade") or tool.ToolTip == "Black Blade") then
+                hasInInventory = true
+                print("[WEAPON PURCHASE] ✅ Dark Blade found in Inventory!")
+                break
+            end
+        end
+    end)
+    
+    if hasInInventory then
+        print("[WEAPON PURCHASE] Dark Blade already in Inventory! Just equipping (no reset)...")
+        
+        -- แค่ Equip ไม่ต้อง Reset Stats (เพราะ Reset แล้วตอนซื้อครั้งแรก)
+        pcall(function()
+            local RS = game:GetService("ReplicatedStorage")
+            RS:WaitForChild("Remotes"):WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", "Dark Blade"}))
+        end)
+        task.wait(2)
+        
+        print("[WEAPON PURCHASE] ✅ Dark Blade equipped! (no reset needed)")
+        print("[WEAPON PURCHASE] ================================")
+        return true
+    end
+    
+    -- ยังไม่มีเลย → ต้องซื้อ
+    local gem = player.Data.Gems.Value or 0
+    local money = player.Data.Money.Value or 0
+    print("[WEAPON PURCHASE] Gems:", gem, "Money:", money)
+    
+    if gem < 150 or money < 250000 then
+        print("[WEAPON PURCHASE] ❌ Not enough resources! Need 150 Gems and 250,000 Money")
+        return false
+    end
+    
+    print("[WEAPON PURCHASE] Starting purchase process...")
+    
+    local purchased = false
+    for attempt = 1, 20 do
+        print("[WEAPON PURCHASE] Attempt", attempt, "to purchase Dark Blade...")
+        
+        local darkBladeNPCCFrame = CFrame.new(-138.99884, 13.2335539, -1089.99146, 0.180115148, -3.10546184e-08, -0.983645558, 2.62686424e-08, 1, -2.67608993e-08, 0.983645558, -2.10189892e-08, 0.180115148)
+        
+        local npcHRP = workspace.ServiceNPCs.DarkBladeNPC:FindFirstChild("HumanoidRootPart")
+        if not npcHRP then
+            print("[WEAPON PURCHASE] NPC not found, teleporting...")
+            tweenPos(darkBladeNPCCFrame)
+            task.wait(2)
+        else
+            local prompt = npcHRP:FindFirstChild("DarkBladeShopPrompt")
+            if prompt then
+                print("[WEAPON PURCHASE] Found DarkBladeShopPrompt, triggering...")
+                prompt.MaxActivationDistance = math.huge
+                fireproximityprompt(prompt)
+                task.wait(3)
+                
+                -- เช็คว่าซื้อสำเร็จ: ใช้ EquipWeapon ดึงดาบ (วิธีที่ทำงานได้)
+                print("[WEAPON PURCHASE] Trying to equip Dark Blade from Inventory...")
+                pcall(function()
+                    local RS = game:GetService("ReplicatedStorage")
+                    RS:WaitForChild("Remotes"):WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", "Dark Blade"}))
+                end)
+                task.wait(2)
+                
+                -- เช็คว่าดาบเข้า Backpack/Character หรือยัง
+                local found = false
+                for _, container in pairs({player.Character, player.Backpack}) do
+                    if container then
+                        for _, tool in pairs(container:GetChildren()) do
+                            if tool:IsA("Tool") and (tool.Name:find("Dark Blade") or tool.ToolTip == "Black Blade") then
+                                found = true
+                                break
+                            end
+                        end
+                    end
+                    if found then break end
+                end
+                
+                if found then
+                    print("[WEAPON PURCHASE] ✅ Dark Blade purchased and equipped!")
+                    purchased = true
+                    break
+                else
+                    print("[WEAPON PURCHASE] ⚠️ Purchase may have failed, retrying...")
+                end
+            else
+                print("[WEAPON PURCHASE] ⚠️ DarkBladeShopPrompt not found, retrying...")
+                tweenPos(darkBladeNPCCFrame)
+                task.wait(2)
+            end
+        end
+        
+        task.wait(1)
+    end
+    
+    -- ถ้าซื้อสำเร็จ → Reset Stats ครั้งเดียว + Upgrade Stats
+    if purchased then
+        print("[WEAPON PURCHASE] Resetting Stats...")
+        pcall(function()
+            ReplicatedStorage:FindFirstChild("RemoteEvents"):FindFirstChild("ResetStats"):FireServer()
+        end)
+        task.wait(2)
+        
+        pcall(upgradeStats)
+        task.wait(2)
+        
+        print("[WEAPON PURCHASE] ✅ Purchase + Reset + Upgrade complete!")
+    end
+    
+    print("[WEAPON PURCHASE] ================================")
+end
+
+-- ฟังก์ชันกลางสำหรับไปหา NPC ส่ง/รับภารกิจ Haki
+local function goToHakiNPC()
+    local hakiNPCPos = Vector3.new(-497.94, 23.66, -1252.64)
+    tweenPos(CFrame.new(hakiNPCPos))
+    task.wait(4)
+    
+    local char = player.Character
+    local VIM = game:GetService("VirtualInputManager")
+    
+    -- กด E key เป็นวิธีหลัก (ทดสอบแล้วได้ผล)
+    for i = 1, 5 do
+        print("[HAKI QUEST] Press E attempt", i)
+        pcall(function()
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.CFrame = CFrame.new(hakiNPCPos) * CFrame.new(0, 0, 3)
+            end
+        end)
+        task.wait(0.5)
+        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+        task.wait(0.1)
+        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+        task.wait(2)
+        
+        local hasHaki = checkHakiStatus()
+        if hasHaki then
+            print("[HAKI QUEST] 🎉 Haki obtained via E key!")
+            return true
+        end
+    end
+    
+    -- Fallback: fireproximityprompt
+    print("[HAKI QUEST] Fallback: fireproximityprompt...")
+    for i = 1, 3 do
+        pcall(function()
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.CFrame = CFrame.new(hakiNPCPos) * CFrame.new(0, 0, 3)
+            end
+            local hakiNPC = workspace.ServiceNPCs:FindFirstChild("HakiQuestNPC")
+            if hakiNPC then
+                local npcHRP = hakiNPC:FindFirstChild("HumanoidRootPart")
+                if npcHRP then
+                    local hakiPrompt = npcHRP:FindFirstChild("HakiQuestPrompt")
+                    if hakiPrompt then
+                        hakiPrompt.MaxActivationDistance = math.huge
+                        hakiPrompt.HoldDuration = 0
+                        fireproximityprompt(hakiPrompt)
+                        print("[HAKI QUEST] ✅ fireproximityprompt fired!")
+                    end
+                end
+            end
+        end)
+        task.wait(2)
+        
+        local hasHaki = checkHakiStatus()
+        if hasHaki then
+            print("[HAKI QUEST] 🎉 Haki obtained!")
+            return true
+        end
+    end
+    
+    return false
+end
+
+local function farmThiefForHaki()
+    print("[HAKI QUEST] Starting to farm Thief for Haki quest...")
+    
+    task.wait(2)
+    local targetNPC = "Thief"  -- default
+    local killCount = 0
+    local lastCheckKills = 0
+    
+    -- ดึงชื่อ NPC จากภารกิจ (ถ้ามี QuestUI)
+    pcall(function()
+        local questUI = player.PlayerGui:FindFirstChild("QuestUI")
+        if questUI and questUI:FindFirstChild("Quest") and questUI.Quest.Visible then
+            local questTitle = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text
+            local questDesc = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestDescription.Text
+            print("[HAKI QUEST] Quest Title:", questTitle)
+            print("[HAKI QUEST] Description:", questDesc)
+            
+            -- เช็คว่าเป็น Haki quest จริงหรือไม่
+            if not questTitle:find("Path to Haki") then
+                print("[HAKI QUEST] ⚠️ Not a Haki quest! Abandoning:", questTitle)
+                abandonRemote:FireServer("repeatable")
+                task.wait(2)
+            end
+            
+            -- ดึงชื่อ NPC จาก description
+            local npcName = questDesc:match("Defeat the (%w+)") or questDesc:match("defeat (%w+)")
+            if npcName then
+                targetNPC = npcName
+                print("[HAKI QUEST] Target NPC:", targetNPC)
+            end
+        else
+            print("[HAKI QUEST] No QuestUI visible - will farm Thief by default")
+        end
+    end)
+    
+    -- Teleport ไปพื้นที่ NPC
+    print("[HAKI QUEST] Teleporting to", targetNPC, "area...")
+    pcall(function()
+        tpRemote:FireServer("Starter")
+    end)
+    task.wait(3)
+    
+    local farmStartTime = tick()
+    
+    while task.wait(0.5) do
+        -- เช็คว่ายังอยู่ใน Haki Quest Mode หรือไม่
+        if not HAKI_QUEST_CONFIG.ENABLED or not _G.HAKI_QUEST_MODE then
+            print("[HAKI QUEST] Haki Quest mode disabled, stopping...")
+            break
+        end
+        
+        -- Timeout 60 นาที
+        if tick() - farmStartTime > 3600 then
+            print("[HAKI QUEST] ⚠️ Farmed for 60 minutes. Stopping...")
+            _G.HAKI_QUEST_MODE = false
+            HAKI_QUEST_CONFIG.ENABLED = false
+            break
+        end
+        
+        local char = player.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+        if char.Humanoid.Health <= 0 then continue end
+        
+        -- ====== เช็คภารกิจทุกรอบ ======
+        local questUI = player.PlayerGui:FindFirstChild("QuestUI")
+        local questVisible = questUI and questUI:FindFirstChild("Quest") and questUI.Quest.Visible
+        local shouldGoToNPC = false
+        
+        if questVisible then
+            -- มี QuestUI → เช็ค progress
+            pcall(function()
+                for _, child in pairs(questUI.Quest.Quest.Holder.Content.QuestInfo:GetDescendants()) do
+                    if child:IsA("TextLabel") then
+                        local text = child.Text
+                        -- เช็ค "Completed!" (เครื่องหมายตกใจ)
+                        if text:find("Completed!") then
+                            shouldGoToNPC = true
+                            print("[HAKI QUEST] ✅ Found 'Completed!' - Going to NPC!")
+                            break
+                        end
+                        -- เช็ค progress X/Y
+                        if string.find(text, "/") then
+                            local current, total = text:match("(%d+)/(%d+)")
+                            if current and total then
+                                if tonumber(current) >= tonumber(total) then
+                                    shouldGoToNPC = true
+                                    print("[HAKI QUEST] ✅ Quest completed! (" .. current .. "/" .. total .. ")")
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        else
+            -- ไม่มี QuestUI → ถ้าตีไปมากกว่า 5 ตัวแล้ว ให้ไปเช็คที่ NPC
+            if killCount > 5 and (killCount - lastCheckKills) >= 5 then
+                print("[HAKI QUEST] No QuestUI + killed", killCount, "mobs - Going to check at NPC...")
+                shouldGoToNPC = true
+            end
+        end
+        
+        -- ====== ไปหา NPC ส่ง/รับภารกิจ ======
+        if shouldGoToNPC then
+            print("[HAKI QUEST] 🔄 Going to HakiQuestNPC...")
+            lastCheckKills = killCount
+            
+            local gotHaki = goToHakiNPC()
+            if gotHaki then
+                print("[HAKI QUEST] 🎉🎉 HAKI OBTAINED!")
+                
+                -- ไปซื้อ Dark Blade ทันที
+                print("[HAKI QUEST] 🛒 Going to buy Dark Blade...")
+                _G.HAKI_QUEST_MODE = false
+                HAKI_QUEST_CONFIG.ENABLED = false
+                
+                pcall(function()
+                    buyDarkBlade()
+                end)
+                
+                print("[HAKI QUEST] ✅ Haki Quest completed! Exiting...")
+                return
+            end
+            
+            -- ยังไม่ได้ Haki → เช็คว่ามีภารกิจใหม่หรือยัง
+            task.wait(2)
+            local newQuestUI = player.PlayerGui:FindFirstChild("QuestUI")
+            local newQuestVisible = newQuestUI and newQuestUI:FindFirstChild("Quest") and newQuestUI.Quest.Visible
+            
+            if newQuestVisible then
+                local newTitle = ""
+                pcall(function()
+                    newTitle = newQuestUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text
+                end)
+                print("[HAKI QUEST] New quest after NPC:", newTitle)
+                
+                -- ดึง NPC ใหม่จาก description
+                pcall(function()
+                    local newDesc = newQuestUI.Quest.Quest.Holder.Content.QuestInfo.QuestDescription.Text
+                    local npcName = newDesc:match("Defeat the (%w+)") or newDesc:match("defeat (%w+)")
+                    if npcName then
+                        targetNPC = npcName
+                        print("[HAKI QUEST] New target NPC:", targetNPC)
+                    end
+                end)
+            else
+                print("[HAKI QUEST] No new quest visible after NPC visit")
+            end
+            
+            -- กลับไปฟาร์มต่อ
+            print("[HAKI QUEST] Teleporting back to farm area...")
+            pcall(function()
+                tpRemote:FireServer("Starter")
+            end)
+            task.wait(3)
+            continue
+        end
+        
+        -- ====== ฟาร์ม NPC ======
+        local npcFound = false
+        
+        for i = 1, 5 do
+            local npcName = targetNPC .. i
+            local npc = workspace.NPCs:FindFirstChild(npcName)
+            
+            if npc and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
+                npcFound = true
+                print("[HAKI QUEST] Found alive", targetNPC .. ":", npcName)
+                
+                local target = npc:FindFirstChild("HumanoidRootPart")
+                if target then
+                    print("[HAKI QUEST] Teleporting to:", npcName)
+                    
+                    while npc.Parent and npc.Humanoid.Health > 0 do
+                        if not char or not char:FindFirstChild("HumanoidRootPart") then break end
+                        if char.Humanoid.Health <= 0 then break end
+                        
+                        pcall(function()
+                            char.HumanoidRootPart.CFrame = target.CFrame * CFrame.new(0, 0, 5)
+                        end)
+                        
+                        pcall(function()
+                            ReplicatedStorage.CombatSystem.Remotes.RequestHit:FireServer()
+                        end)
+                        
+                        task.wait(0.3)
+                    end
+                    
+                    killCount = killCount + 1
+                    print("[HAKI QUEST]", targetNPC, "defeated:", npcName, "| Total kills:", killCount)
+                    task.wait(0.5)
+                    break
+                end
+            end
+        end
+        
+        if not npcFound then
+            print("[HAKI QUEST] No", targetNPC, "found, waiting for respawn...")
+            task.wait(3)
+        end
+    end
+end
+
+-- Main Haki Quest Function
+local function startHakiQuest()
+    if not HAKI_QUEST_CONFIG.ENABLED then return end
+    
+    print("[HAKI QUEST] Starting Haki Quest System...")
+    
+    -- รับภารกิจ Haki
+    pcall(acceptHakiQuest)
+    
+    -- เริ่มฟาร์ม Thief
+    pcall(farmThiefForHaki)
+end
+
 -- Use the working auto quest/farm system from example code
 _G.AUTOFUNCTION = true
+_G.HAKI_QUEST_MODE = false  -- สลับโหมด
+
+-- ระบบหลักที่จะเช็ค Level → Haki → อาวุธ
 task.spawn(function()
+    while _G.AUTOFUNCTION do
+        task.wait(10) -- เช็คทุก 10 วินาที
+        
+        local playerLevel = 0
+        pcall(function()
+            playerLevel = player.Data.Level.Value or 0
+        end)
+        
+        -- เช็คว่าถึง Level 1000 หรือยัง
+        if playerLevel >= 1000 then
+            -- เช็คว่ามี Haki หรือยัง
+            local hasHaki = false
+            pcall(function()
+                hasHaki = checkHakiStatus()
+            end)
+            
+            if hasHaki then
+                -- มี Haki แล้ว → ไปลูปหลัก (ดาบซื้อใน farmThiefForHaki แล้ว)
+                print("[SYSTEM] 🎉 Level 1000+ and has Haki! Running Normal Quest System...")
+                _G.HAKI_QUEST_MODE = false
+                HAKI_QUEST_CONFIG.ENABLED = false
+                break
+            else
+                -- ยังไม่มี Haki ต้องทำ Haki Quest
+                if not _G.HAKI_QUEST_MODE then
+                    print("[SYSTEM] 🔥 Level 1000+ but no Haki! Starting Haki Quest...")
+                    _G.HAKI_QUEST_MODE = true
+                    HAKI_QUEST_CONFIG.ENABLED = true
+                    pcall(startHakiQuest)
+                end
+            end
+        else
+            -- ยังไม่ถึง Level 1000 ทำโค้ดหลักปกติ
+            print("[SYSTEM] 📈 Level", playerLevel, "- Running Normal Quest System...")
+            _G.HAKI_QUEST_MODE = false
+            HAKI_QUEST_CONFIG.ENABLED = false
+            break -- ออกจาก loop เพื่อไปทำโค้ดหลัก
+        end
+    end
+end)
+
+-- NORMAL QUEST SYSTEM
+task.spawn(function()
+    task.wait(15) -- รอให้เช็ค level ก่อน
+    
+    -- Normal Quest System
     while _G.AUTOFUNCTION do task.wait()
+        -- ถ้าอยู่ใน Haki Quest Mode ให้รอ
+        if _G.HAKI_QUEST_MODE then
+            task.wait(10)
+            continue
+        end
+        
         local char = player.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
         if char.Humanoid.Health <= 0 then continue end
@@ -934,15 +1884,77 @@ task.spawn(function()
             print("quest not ok")
             abandonRemote:FireServer("repeatable")
         else
+            -- Teleport to quest area first
+            print("[FARM] Teleporting to quest area...")
+            tweenPos(CFrame.new(questInfo.position))
+            task.wait(4) -- Wait for NPCs to load
             
-            if (char.HumanoidRootPart.Position - questInfo.position).Magnitude >= 50 and player.PlayerGui.QuestUI.Quest.Visible then
-                print("TP to quest...")
-                tweenPos(CFrame.new(questInfo.position))
+            -- เลือกอาวุธ: เช็คก่อนว่า Dark Blade Equip อยู่แล้วหรือยัง
+            local toolName = "Combat"
+            local RS = game:GetService("ReplicatedStorage")
+            
+            print("[FARM] === Checking weapon ===")
+            
+            -- เช็คว่า Dark Blade อยู่ใน Character/Backpack แล้วหรือยัง
+            local darkBladeInHand = false
+            for _, container in pairs({player.Character, player.Backpack}) do
+                if container then
+                    for _, tool in pairs(container:GetChildren()) do
+                        if tool:IsA("Tool") and (tool.Name:find("Dark Blade") or tool.ToolTip == "Black Blade") then
+                            darkBladeInHand = true
+                            toolName = "Dark Blade"
+                            print("[FARM] ✅ Dark Blade already in", container.Name)
+                            break
+                        end
+                    end
+                end
+                if darkBladeInHand then break end
             end
             
-            -- Get best weapon automatically (highest level, not Combat)
-            local toolName = getBestWeapon()
+            -- ถ้ายังไม่มีใน Backpack/Character → RequestInventory + EquipWeapon (retry 3 ครั้ง)
+            if not darkBladeInHand then
+                print("[FARM] No Dark Blade in hand, loading from Inventory...")
+                
+                -- เรียก RequestInventory ก่อนเพื่อให้ server โหลด inventory
+                pcall(function()
+                    RS:WaitForChild("Remotes"):WaitForChild("RequestInventory"):FireServer()
+                end)
+                task.wait(1)
+                
+                -- ลอง EquipWeapon สูงสุด 3 ครั้ง
+                for attempt = 1, 3 do
+                    pcall(function()
+                        RS:WaitForChild("Remotes"):WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", "Dark Blade"}))
+                    end)
+                    task.wait(2)
+                    
+                    -- เช็คว่าดาบเข้ามาหรือยัง
+                    for _, container in pairs({player.Character, player.Backpack}) do
+                        if container then
+                            for _, tool in pairs(container:GetChildren()) do
+                                if tool:IsA("Tool") and (tool.Name:find("Dark Blade") or tool.ToolTip == "Black Blade") then
+                                    darkBladeInHand = true
+                                    toolName = "Dark Blade"
+                                    print("[FARM] ✅ Dark Blade equipped! (attempt", attempt .. ")")
+                                    break
+                                end
+                            end
+                        end
+                        if darkBladeInHand then break end
+                    end
+                    
+                    if darkBladeInHand then break end
+                    print("[FARM] Attempt", attempt, "failed, retrying...")
+                end
+            end
+            
+            if not darkBladeInHand then
+                toolName = getBestWeapon()
+                print("[FARM] No Dark Blade, using:", toolName)
+            end
+            
             local npcType = getnpcQuest(questInfo.npcName)
+            print("[FARM] Looking for NPC type:", npcType)
             local closest = nil
 
             for _, v in pairs(workspace.NPCs:GetChildren()) do
@@ -950,18 +1962,42 @@ task.spawn(function()
                     and v:FindFirstChild("HumanoidRootPart")
                     and v:FindFirstChild("Humanoid")
                     and v.Humanoid.Health > 0 then
+                    
                     local subName = v.Humanoid.DisplayName:gsub("%s+", ""):gsub("%[Lv%.%s*%d+%]", "")
-
-                    if npcType == tostring(subName) or v.Name == npcType then
-                        if v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                            closest = v
-                        end
+                    
+                    -- Exact match (ตรงทุกตัวอักษร)
+                    local exactMatch = npcType == tostring(subName) or v.Name == npcType
+                    -- Fuzzy match (มีบางส่วนตรงกัน)
+                    local fuzzyMatch = subName:find(npcType, 1, true) or v.Name:find(npcType, 1, true)
+                    
+                    if exactMatch then
+                        closest = v
+                        print("[FARM] Exact match:", v.Name)
+                        break -- เจอตรงๆ หยุดเลย
+                    elseif fuzzyMatch then
+                        closest = v -- เก็บไว้ก่อน แต่หาต่อ
+                        print("[FARM] Fuzzy match:", v.Name)
                     end
                 end
             end
         
             if not closest then
-                continue
+                print("[FARM] ❌ NPC not found:", npcType, "- Waiting for respawn...")
+                task.wait(5) -- รอ NPC respawn ที่จุดเดิม ไม่ teleport ซ้ำ
+                
+                -- เช็คอีกรอบก่อน teleport ใหม่
+                for _, v in pairs(workspace.NPCs:GetChildren()) do
+                    if v:IsA("Model") and v:FindFirstChild("HumanoidRootPart") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                        local subName = v.Humanoid.DisplayName:gsub("%s+", ""):gsub("%[Lv%.%s*%d+%]", "")
+                        if npcType == tostring(subName) or v.Name == npcType or subName:find(npcType, 1, true) or v.Name:find(npcType, 1, true) then
+                            closest = v
+                            print("[FARM] ✅ NPC spawned after waiting:", v.Name)
+                            break
+                        end
+                    end
+                end
+                
+                if not closest then continue end
             end
 
             print("Found target NPC:", closest.Name)
@@ -981,9 +2017,30 @@ task.spawn(function()
             Box.Parent = workspace
             
             -- Equip weapon
-            local tool = player.Backpack:FindFirstChild(toolName) or char:FindFirstChild(toolName)
+            local tool = nil
+            if toolName == "Dark Blade" then
+                -- หา Dark Blade ด้วย pattern matching
+                for _, container in pairs({player.Backpack, char}) do
+                    if container then
+                        for _, t in pairs(container:GetChildren()) do
+                            if t:IsA("Tool") and (t.Name:find("Dark Blade") or t.ToolTip == "Black Blade") then
+                                tool = t
+                                break
+                            end
+                        end
+                    end
+                    if tool then break end
+                end
+            else
+                -- อาวุธอื่นๆ ใช้ FindFirstChild ปกติ
+                tool = player.Backpack:FindFirstChild(toolName) or char:FindFirstChild(toolName)
+            end
+            
             if tool then
+                print("[FARM] Equipping:", tool.Name)
                 char.Humanoid:EquipTool(tool)
+            else
+                print("[FARM] ⚠️ Tool not found:", toolName)
             end
 
             repeat task.wait()
@@ -997,10 +2054,30 @@ task.spawn(function()
 
                 tweenPos(CFrame.new(closest.HumanoidRootPart.Position + Vector3.new(0, 0, 5)))
                 
-                -- Attack
+                -- Use all skills and haki
+                pcall(function()
+                    -- Toggle Haki
+                    ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("HakiRemote"):FireServer("Toggle")
+                end)
+                
+                pcall(function()
+                    -- Toggle Observation Haki
+                    ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("ObservationHakiRemote"):FireServer("Toggle")
+                end)
+                
+                -- Use all ability slots (1-4)
+                for i = 1, 4 do
+                    pcall(function()
+                        ReplicatedStorage:WaitForChild("AbilitySystem"):WaitForChild("Remotes"):WaitForChild("RequestAbility"):FireServer(i)
+                    end)
+                end
+                
+                -- Normal attack
                 pcall(function()
                     hitRemote:FireServer()
                 end)
+                
+                task.wait(0.1) -- Small delay between attack cycles
 
             until char.Humanoid.Health <= 0 or not player.PlayerGui.QuestUI.Quest.Visible
 
@@ -1009,6 +2086,7 @@ task.spawn(function()
         end
     end
 end)
+--]]
 
 
 player.OnTeleport:Connect(function(State)
