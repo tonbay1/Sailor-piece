@@ -596,256 +596,55 @@ while task.wait(5) do
 end
 end)
 
-local function getInfoQuest()
-	local success, result = pcall(function()
-		return ReplicatedStorage.RemoteEvents.GetQuestArrowTarget:InvokeServer()
-	end)
-	
-	if success and result then
-		return result
-	else
-		return nil
-	end
-end
-
-local function getBestWeapon()
-	local weapons = {}
-	
-	-- Collect all weapons from Backpack and Character
-	for _, container in pairs({player.Backpack, player.Character}) do
-		for _, tool in pairs(container:GetChildren()) do
-			if tool:IsA("Tool") and tool.Name ~= "Combat" then
-				-- Try to get weapon level from name (e.g., "Sword Lv.50")
-				local level = tonumber(tool.Name:match("Lv%.?%s*(%d+)")) or 0
-				
-				-- Store weapon info
-				table.insert(weapons, {
-					tool = tool,
-					name = tool.Name,
-					level = level,
-					tooltip = tool.ToolTip or ""
-				})
-			end
-		end
-	end
-	
-	-- Sort by level (highest first)
-	table.sort(weapons, function(a, b)
-		return a.level > b.level
-	end)
-	
-	-- Return best weapon or Combat as fallback
-	if #weapons > 0 then
-		print("[WEAPON] Best weapon found:", weapons[1].name, "Lv."..weapons[1].level)
-		return weapons[1].name
-	else
-		print("[WEAPON] No weapon found, using Combat")
-		return "Combat"
-	end
-end
-
-local function getnpcQuest(npcname)
-	local success, result = pcall(function()
-		local module = require(ReplicatedStorage.Modules.QuestConfig)
-		for questNPC, questData in pairs(module.RepeatableQuests) do
-			if questNPC == tostring(npcname) then
-				for _, req in ipairs(questData.requirements) do
-					return req.npcType
-				end
-			end
-		end
-		return nil
-	end)
-	
-	if success then
-		return result
-	else
-		return nil
-	end
-end
-
-local function tweenPos(targetCF)
-	-- Use direct reference like working example
-	local root = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-	if not root then return end
-	
-	local startCF = root.CFrame
-	local steps = 5
-	
-	for i = 1, steps do
-		local alpha = i / steps
-		root.CFrame = startCF:Lerp(targetCF, alpha)
-		task.wait(0.05)
-	end
-end
-
 local function farmNPC(name)
-	print("[FARM] Starting to farm:", name)
-	
-	-- หา NPC ตัวแรกที่มีชีวิต
-	local function findAliveNPC()
-		-- ลองหา NPC แบบมีเลข 1-5
-		for i = 1, 5 do
-			local npcName = name .. i
-			local npc = workspace.NPCs:FindFirstChild(npcName)
-			
-			if npc and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
-				return npc
-			end
-		end
-		
-		-- ลองหาแบบไม่มีเลข
-		local npc = workspace.NPCs:FindFirstChild(name)
-		if npc and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
-			return npc
-		end
-		
-		return nil
-	end
-	
-	-- Teleport ไปที่ NPC ตัวแรกที่เจอ (ใช้ tween)
-	local firstNPC = findAliveNPC()
-	if firstNPC then
-		local target = firstNPC:FindFirstChild("HumanoidRootPart")
-			or firstNPC:FindFirstChild("Torso")
-			or firstNPC:FindFirstChild("UpperTorso")
-		
-		if target and hrp then
-			print("[FARM] Teleporting to:", firstNPC.Name)
-			local targetCF = target.CFrame * CFrame.new(0, 5, 10)
-			tweenPos(targetCF)
-			task.wait(0.5)
-		end
-	else
-		print("[FARM] No NPC found:", name)
-		return
-	end
 
-	-- เริ่มฟาร์ม
 	while task.wait(0.2) do
-		if hum.Health <= 0 then 
-			print("[FARM] Player died, stopping farm")
-			break 
-		end
+
+		if hum.Health <= 0 then break end
 
 		local found = false
 
-		for i = 1, 5 do
-			local npc = workspace.NPCs:FindFirstChild(name .. i)
+		for i = 1,5 do
+			local npc = workspace.NPCs:FindFirstChild(name..i)
 
 			if npc and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
 				found = true
 
-				local target = npc:FindFirstChild("HumanoidRootPart")
-					or npc:FindFirstChild("Torso")
-					or npc:FindFirstChild("UpperTorso")
+				local target =
+				npc:FindFirstChild("HumanoidRootPart")
+				or npc:FindFirstChild("Torso")
+				or npc:FindFirstChild("UpperTorso")
 
 				if target then
-					local root = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-					if root then
-						root.CFrame = target.CFrame * CFrame.new(0, 0, 7)
-						task.wait(0.7)
-					end
-				end
-			end
-		end
-		
-		-- ลองหาแบบไม่มีเลข
-		if not found then
-			local npc = workspace.NPCs:FindFirstChild(name)
-			if npc and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
-				found = true
-				
-				local target = npc:FindFirstChild("HumanoidRootPart")
-					or npc:FindFirstChild("Torso")
-					or npc:FindFirstChild("UpperTorso")
-				
-				if target then
-					local root = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-					if root then
-						root.CFrame = target.CFrame * CFrame.new(0, 0, 7)
-						task.wait(0.7)
-					end
+					hrp.CFrame = target.CFrame * CFrame.new(0,0,7)
+					task.wait(0.7)
 				end
 			end
 		end
 
 		if not found then
-			print("[FARM] No more NPCs found, stopping farm")
 			break
 		end
+
 	end
-	
-	print("[FARM] Finished farming:", name)
+
 end
 
 
 local function acceptQuest(questName, mapName)
-	print("[QUEST] Checking quest status...")
-	
-	-- เช็คว่ามี quest UI หรือยัง
-	local questUI = player.PlayerGui:FindFirstChild("QuestUI")
-	if not questUI then
-		warn("[QUEST] QuestUI not found!")
-		return
-	end
-	
-	-- ดึงข้อมูล quest
-	local questInfo = getInfoQuest()
-	if not questInfo then
-		warn("[QUEST] Cannot get quest info!")
-		return
-	end
-	
-	local questVisible = questUI.Quest.Visible
-	
-	-- ถ้ายังไม่มี quest
-	if not questVisible then
-		print("[QUEST] No quest active, teleporting to Quest NPC...")
-		
-		-- Teleport ไปที่ Quest NPC โดยตรง
-		if questInfo.position then
-			tweenPos(CFrame.new(questInfo.position))
-			task.wait(1)
-		end
-		
-		-- รับ quest ด้วย questInfo.npcName
-		print("[QUEST] Accepting quest:", questInfo.npcName)
-		pcall(function()
-			questRemote:FireServer(questInfo.npcName)
-		end)
-		
+	if mapName then
+		tpRemote:FireServer(mapName)
 		task.wait(1)
-		print("[QUEST] Quest accepted!")
-		
-	-- ถ้ามี quest แล้วแต่ไม่ตรง
-	elseif questVisible then
-		local currentTitle = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text
-		
-		if currentTitle ~= questInfo.questTitle then
-			print("[QUEST] Wrong quest, abandoning...")
-			pcall(function()
-				abandonRemote:FireServer("repeatable")
-			end)
-			task.wait(1)
-			
-			-- Teleport และรับ quest ใหม่
-			if questInfo.position then
-				tweenPos(CFrame.new(questInfo.position))
-				task.wait(1)
-			end
-			
-			print("[QUEST] Accepting quest:", questInfo.npcName)
-			pcall(function()
-				questRemote:FireServer(questInfo.npcName)
-			end)
-			
-			task.wait(1)
-			print("[QUEST] Quest accepted!")
-		else
-			print("[QUEST] Already on correct quest:", currentTitle)
-		end
 	end
+	if lastQuest ~= questName then
+		pcall(function()
+			abandonRemote:FireServer("repeatable")
+		end)
+		task.wait(0.5)
+		questRemote:FireServer(questName)
+		lastQuest = questName
+	end
+	questRemote:FireServer(questName)
 end
 
 local function farmBoss(name)
@@ -861,13 +660,9 @@ local function farmBoss(name)
 		if target then
 			print("Farming Boss:", name)
 			while npc.Parent and npc.Humanoid.Health > 0 do
-				local root = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-				if not root then break end
-				
-				local hum = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid")
-				if not hum or hum.Health <= 0 then break end
+				if hum.Health <= 0 then break end
 
-				root.CFrame = target.CFrame * CFrame.new(0,0,7)
+				hrp.CFrame = target.CFrame * CFrame.new(0,0,7)
 
 				task.wait()
 
@@ -915,100 +710,116 @@ task.spawn(function()
 end)
 --]]
 
--- Use the working auto quest/farm system from example code
-_G.AUTOFUNCTION = true
-task.spawn(function()
-    while _G.AUTOFUNCTION do task.wait()
-        local char = player.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
-        if char.Humanoid.Health <= 0 then continue end
+while task.wait(0.3) do
 
-        local questInfo = getInfoQuest()
-        if not questInfo then continue end
+	if hum.Health <=0 or not char.Parent then
+		char,hrp,hum = getChar()
+	end
 
-        if not player.PlayerGui.QuestUI.Quest.Visible then
-            print("not have a quest")
-            tweenPos(CFrame.new(questInfo.position))
-            questRemote:FireServer(questInfo.npcName)
-        elseif player.PlayerGui.QuestUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text ~= questInfo.questTitle then
-            print("quest not ok")
-            abandonRemote:FireServer("repeatable")
-        else
-            
-            if (char.HumanoidRootPart.Position - questInfo.position).Magnitude >= 50 and player.PlayerGui.QuestUI.Quest.Visible then
-                print("TP to quest...")
-                tweenPos(CFrame.new(questInfo.position))
-            end
-            
-            -- Get best weapon automatically (highest level, not Combat)
-            local toolName = getBestWeapon()
-            local npcType = getnpcQuest(questInfo.npcName)
-            local closest = nil
+	local tool = player.Backpack:FindFirstChild("Combat") or char:FindFirstChild("Combat")
 
-            for _, v in pairs(workspace.NPCs:GetChildren()) do
-                if v:IsA("Model") 
-                    and v:FindFirstChild("HumanoidRootPart")
-                    and v:FindFirstChild("Humanoid")
-                    and v.Humanoid.Health > 0 then
-                    local subName = v.Humanoid.DisplayName:gsub("%s+", ""):gsub("%[Lv%.%s*%d+%]", "")
+	if tool then
+		if tool.Parent ~= char then
+			hum:EquipTool(tool)
+		end
+	end
 
-                    if npcType == tostring(subName) or v.Name == npcType then
-                        if v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                            closest = v
-                        end
-                    end
-                end
-            end
-        
-            if not closest then
-                continue
-            end
+	local level = player.Data.Level.Value
 
-            print("Found target NPC:", closest.Name)
+	-- 0-250
+	if level <=250 then
+		acceptQuest("QuestNPC1")
+		farmNPC("Thief")
 
-            -- freeze
-            closest.Humanoid.WalkSpeed = 0
-            closest.Humanoid.JumpPower = 0
-            closest.HumanoidRootPart.Anchored = true
+		-- 250-500
+	elseif level <=500 then
 
-            local Box = Instance.new("SelectionBox")
-            
-            Box.Adornee = closest
-            Box.Color3 = Color3.fromRGB(0, 255, 0)
-            Box.LineThickness = 0.08
-            Box.SurfaceTransparency = 0.6
-            Box.SurfaceColor3 = Color3.fromRGB(0, 255, 0)
-            Box.Parent = workspace
-            
-            -- Equip weapon
-            local tool = player.Backpack:FindFirstChild(toolName) or char:FindFirstChild(toolName)
-            if tool then
-                char.Humanoid:EquipTool(tool)
-            end
+		acceptQuest("QuestNPC3", "Jungle")
+		farmNPC("Monkey")
 
-            repeat task.wait()
-        
-                if not closest 
-                    or not closest.Parent 
-                    or not closest:FindFirstChild("HumanoidRootPart") 
-                    or closest.Humanoid.Health <= 0 then
-                    break
-                end
+		-- 500-750
+	elseif level <=750 then
 
-                tweenPos(CFrame.new(closest.HumanoidRootPart.Position + Vector3.new(0, 0, 5)))
-                
-                -- Attack
-                pcall(function()
-                    hitRemote:FireServer()
-                end)
+		acceptQuest("QuestNPC4", "Jungle")
+		farmBoss("MonkeyBoss")
 
-            until char.Humanoid.Health <= 0 or not player.PlayerGui.QuestUI.Quest.Visible
+		-- 750-1000
+	elseif level <=1000 then
 
-            Box:Destroy()
-            print("Exit Loop:", closest.Name)
-        end
-    end
-end)
+		acceptQuest("QuestNPC5", "Desert")
+		farmNPC("DesertBandit")
+
+		-- 1000-1500
+	elseif level <=1500 then
+
+		acceptQuest("QuestNPC6", "Desert")
+		farmBoss("DesertBoss")
+
+		-- 1500-2000
+	elseif level <=2000 then
+
+		acceptQuest("QuestNPC7", "Snow")
+		farmNPC("FrostRogue")
+
+		-- 2000-3000
+	elseif level <=3000 then
+
+		acceptQuest("QuestNPC8", "Snow")
+		farmBoss("SnowBoss")
+
+		-- 3000-4000
+	elseif level <=4000 then
+
+		acceptQuest("QuestNPC9", "Shibuya")
+		farmNPC("Sorcerer")
+
+		-- 4000-5000
+	elseif level <=5000 then
+
+		acceptQuest("QuestNPC10", "Shibuya")
+		farmBoss("PandaMiniBoss")
+
+		-- 5000-6251
+	elseif level <=6251 then
+
+		acceptQuest("QuestNPC11", "HuecoMundo")
+		farmNPC("Hollow")
+
+		-- 6251-7001
+	elseif level <=7001 then
+
+		acceptQuest("QuestNPC12", "Shinjuku")
+		farmNPC("StrongSorcerer")
+
+		-- 7001-8001
+	elseif level <=8001 then
+
+		acceptQuest("QuestNPC13", "Shinjuku")
+		farmNPC("Curse")
+
+		-- 8001-9001
+	elseif level <=9001 then
+
+		acceptQuest("QuestNPC14", "Slime")
+		farmNPC("Slime")
+
+		-- 9001-10001
+	elseif level <=10001 then
+
+		acceptQuest("QuestNPC15", "Academy")
+		farmNPC("AcademyTeacher")
+
+		-- 10001-10751
+	elseif level <=10751 then
+
+		acceptQuest("QuestNPC16", "Judgement")
+		farmNPC("Swordsman")
+
+	end
+
+	task.wait(0.5)
+
+end
 
 
 player.OnTeleport:Connect(function(State)
