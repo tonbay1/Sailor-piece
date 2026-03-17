@@ -26,7 +26,7 @@ _G.Config = {
     DarkBladeMoney  = 250000,   -- Money ที่ต้องใช้
 
     -- Fruit Farm (ฟาร์มหาผลปีศาจ)
-    FruitFarm       = true,     -- เปิด/ปิดการฟาร์มผล
+    FruitFarm       = false,     -- เปิด/ปิดการฟาร์มผล
     FruitMinLevel   = 11500,    -- Level ขั้นต่ำที่จะเริ่มฟาร์มผล
     TargetFruit     = "Quake",  -- ผลที่ต้องการ
     FruitFarmIsland = "Shinjuku", -- เกาะที่จะฟาร์ม
@@ -549,8 +549,39 @@ task.spawn(function()
             table.insert(cratesList, name .. " x" .. qty)
         end
 
+        -- นับ Aura, Cosmetic Crate, Clan Reroll, Trait Reroll, Race Reroll
+        local auraCount = 0
+        local cosmeticCrateCount = 0
+        local clanRerollCount = 0
+        local traitRerollCount = 0
+        local raceRerollCount = 0
+        
+        -- เช็คจาก inventory (ทุก rarity)
+        for _, items in pairs(inventoryByRarity) do
+            for name, qty in pairs(items) do
+                local lower = name:lower()
+                if lower:find("aura") then
+                    auraCount = auraCount + qty
+                elseif lower:find("clan reroll") then
+                    clanRerollCount = clanRerollCount + qty
+                elseif lower:find("trait reroll") then
+                    traitRerollCount = traitRerollCount + qty
+                elseif lower:find("race reroll") then
+                    raceRerollCount = raceRerollCount + qty
+                end
+            end
+        end
+        
+        -- เช็ค Cosmetic Crate จาก crates
+        for name, qty in pairs(cratesAndBoxes) do
+            if name:lower():find("cosmetic") then
+                cosmeticCrateCount = cosmeticCrateCount + qty
+            end
+        end
+        
         -- Build message
-        local message = hakiStatus .. " ⭐LVL " .. level .. " 💰" .. formatNumber(money) .. " 💎" .. formatNumber(gems)
+        local extraInfo = " 🌀Aura:" .. auraCount .. " 🎁Cosmetic:" .. cosmeticCrateCount .. " 🔄Clan:" .. clanRerollCount .. " 🎭Trait:" .. traitRerollCount .. " 🧬Race:" .. raceRerollCount
+        local message = hakiStatus .. " ⭐LVL " .. level .. " 💰" .. formatNumber(money) .. " 💎" .. formatNumber(gems) .. extraInfo
         print("[HORST]", message)
 
         -- Important items
