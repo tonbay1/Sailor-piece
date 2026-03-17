@@ -26,7 +26,7 @@ _G.Config = {
     DarkBladeMoney  = 250000,   -- Money ที่ต้องใช้
 
     -- Fruit Farm (ฟาร์มหาผลปีศาจ)
-    FruitFarm       = false,     -- เปิด/ปิดการฟาร์มผล
+    FruitFarm       = true,     -- เปิด/ปิดการฟาร์มผล
     FruitMinLevel   = 11500,    -- Level ขั้นต่ำที่จะเริ่มฟาร์มผล
     TargetFruit     = "Quake",  -- ผลที่ต้องการ
     FruitFarmIsland = "Shinjuku", -- เกาะที่จะฟาร์ม
