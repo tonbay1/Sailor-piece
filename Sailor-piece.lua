@@ -1186,6 +1186,205 @@ local function fruitFarmLoop()
     print("[FRUIT FARM] ❌ Fruit Farm Loop ended")
 end
 
+-- ═══════════════════════════════════════════════════════════════
+-- [11] ARTIFACTS UNLOCK SYSTEM
+-- ═══════════════════════════════════════════════════════════════
+local function checkArtifactsUnlocked()
+    -- เช็คว่าเปิด Artifacts แล้วหรือยัง (ใช้ data.Unlocked จาก GetArtifactData)
+    local unlocked = false
+    pcall(function()
+        local data = RS:WaitForChild("RemoteFunctions"):WaitForChild("GetArtifactData"):InvokeServer()
+        if data and type(data) == "table" and data.Unlocked == true then
+            unlocked = true
+            print("[ARTIFACTS] ✅ Already unlocked")
+        else
+            print("[ARTIFACTS] ❌ Not unlocked yet")
+        end
+    end)
+    return unlocked
+end
+
+local function unlockArtifacts()
+    print("[ARTIFACTS] ========== UNLOCK ARTIFACTS START ==========")
+    
+    -- 1. เช็คว่าเปิดแล้วหรือยัง
+    if checkArtifactsUnlocked() then
+        print("[ARTIFACTS] ⏭️ Already unlocked, skipping...")
+        return true
+    end
+    
+    -- 2. วาปไป NPC
+    print("[ARTIFACTS] 📍 Teleporting to ArtifactsUnlocker NPC...")
+    local npcCFrame = CFrame.new(-440.516388, 1.77979147, -1095.86072, -0.289305925, -0, -0.957236767, 0, 1, -0, 0.957236767, 0, -0.289305925)
+    
+    tweenPos(npcCFrame)
+    task.wait(3)
+    
+    -- 3. หา Prompt และยิง
+    print("[ARTIFACTS] 🔍 Finding ArtifactPrompt...")
+    local npc = workspace:FindFirstChild("ServiceNPCs")
+    if npc then
+        npc = npc:FindFirstChild("ArtifactsUnlocker")
+    end
+    if npc then
+        npc = npc:FindFirstChild("HumanoidRootPart")
+    end
+    
+    local prompt = nil
+    if npc then
+        prompt = npc:FindFirstChild("ArtifactPrompt")
+    end
+    
+    if not prompt then
+        print("[ARTIFACTS] ❌ ArtifactPrompt not found!")
+        return false
+    end
+    
+    print("[ARTIFACTS] 💰 Firing ArtifactPrompt...")
+    prompt.MaxActivationDistance = math.huge
+    fireproximityprompt(prompt)
+    task.wait(2)
+    
+    -- 4. รอ ConfirmUI และกด Yes
+    print("[ARTIFACTS] ⏳ Waiting for ConfirmUI...")
+    task.wait(1)
+    
+    local confirmUI = player.PlayerGui:FindFirstChild("ConfirmUI")
+    if confirmUI and confirmUI.Enabled then
+        print("[ARTIFACTS] ✅ ConfirmUI found, clicking Yes...")
+        local yesButton = confirmUI:FindFirstChild("MainFrame")
+        if yesButton then
+            yesButton = yesButton:FindFirstChild("ButtonsHolder")
+        end
+        if yesButton then
+            yesButton = yesButton:FindFirstChild("Yes")
+        end
+        
+        if yesButton then
+            pcall(function()
+                for _, connection in pairs(getconnections(yesButton.MouseButton1Click)) do
+                    connection:Fire()
+                end
+            end)
+            print("[ARTIFACTS] 🖱️ Clicked Yes button")
+        end
+    else
+        -- ถ้าไม่มี UI → ยิง remote ตรงๆ
+        print("[ARTIFACTS] ⚠️ No ConfirmUI, firing ArtifactUnlockSystem remote...")
+        pcall(function()
+            RemoteEvents:WaitForChild("ArtifactUnlockSystem"):FireServer()
+        end)
+    end
+    
+    task.wait(3)
+    
+    -- 5. เช็คว่าเปิดสำเร็จหรือยัง
+    if checkArtifactsUnlocked() then
+        print("[ARTIFACTS] ✅ Artifacts unlocked successfully!")
+        return true
+    else
+        print("[ARTIFACTS] ❌ Failed to unlock Artifacts")
+        return false
+    end
+end
+
+local function equipArtifacts()
+    oldPrint("[ARTIFACTS] 🎯 Equipping Artifacts...")
+    
+    -- 1. เปิด UI ก่อน
+    pcall(function()
+        RemoteEvents:WaitForChild("ArtifactUIOpened"):FireServer()
+    end)
+    oldPrint("[ARTIFACTS] 📂 Opened Artifact UI")
+    task.wait(2)
+    
+    -- 2. ดึงข้อมูล artifact ทั้งหมด
+    local data = nil
+    local ok, err = pcall(function()
+        data = RS:WaitForChild("RemoteFunctions"):WaitForChild("GetArtifactData"):InvokeServer()
+    end)
+    oldPrint("[ARTIFACTS] 📡 GetArtifactData ok:", tostring(ok), "err:", tostring(err))
+    
+    if data and type(data) == "table" then
+        -- Deep debug: แสดงทุก field
+        local allIds = {}
+        local function deepScan(tbl, prefix)
+            for k, v in pairs(tbl) do
+                local key = prefix .. tostring(k)
+                if type(v) == "table" then
+                    oldPrint("[ARTIFACTS] 📊 " .. key .. " = {table}")
+                    deepScan(v, key .. ".")
+                else
+                    oldPrint("[ARTIFACTS] 📊 " .. key .. " = " .. tostring(v))
+                    -- เก็บทุกค่าที่เป็น string UUID format
+                    if type(v) == "string" and v:match("%x%x%x%x%x%x%x%x%-%x%x%x%x") then
+                        table.insert(allIds, v)
+                        oldPrint("[ARTIFACTS] 🔑 Found UUID: " .. v)
+                    end
+                end
+            end
+        end
+        deepScan(data, "")
+        
+        -- Equip ทุก UUID ที่เจอ
+        oldPrint("[ARTIFACTS] 🔑 Total UUIDs found: " .. #allIds)
+        for i, uuid in ipairs(allIds) do
+            pcall(function()
+                RemoteEvents:WaitForChild("ArtifactEquip"):FireServer(uuid)
+            end)
+            oldPrint("[ARTIFACTS] ✅ Equipped #" .. i .. ": " .. uuid)
+            task.wait(0.5)
+        end
+    else
+        oldPrint("[ARTIFACTS] ⚠️ No artifact data, type:", type(data))
+    end
+    
+    task.wait(1)
+    
+    -- 3. ปิด UI → กดปุ่ม Close ใน ArtifactsUI
+    pcall(function()
+        local artifactsUI = player.PlayerGui:FindFirstChild("ArtifactsUI")
+        if artifactsUI then
+            local mainFrame = artifactsUI:FindFirstChild("ArtifactsMainFrame")
+            if mainFrame then
+                local closeHolder = mainFrame:FindFirstChild("CloseButtonFrameHolder")
+                if closeHolder then
+                    -- หาปุ่มใน CloseButtonFrameHolder
+                    for _, btn in pairs(closeHolder:GetDescendants()) do
+                        if btn:IsA("TextButton") or btn:IsA("ImageButton") then
+                            oldPrint("[ARTIFACTS] 🔒 Clicking close button:", btn.Name)
+                            pcall(function()
+                                for _, conn in pairs(getconnections(btn.MouseButton1Click)) do
+                                    conn:Fire()
+                                end
+                            end)
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    task.wait(0.5)
+    
+    -- Fallback: ยิง remote + force disable
+    pcall(function()
+        RemoteEvents:WaitForChild("ArtifactCloseUI"):FireServer()
+    end)
+    pcall(function()
+        local artifactsUI = player.PlayerGui:FindFirstChild("ArtifactsUI")
+        if artifactsUI then
+            artifactsUI.Enabled = false
+            oldPrint("[ARTIFACTS] 🔒 Force disabled ArtifactsUI")
+        end
+    end)
+    
+    oldPrint("[ARTIFACTS] ✅ Closed Artifact UI")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- [12] FRUIT FARM SYSTEM
+-- ═══════════════════════════════════════════════════════════════
 local function startFruitFarm()
     oldPrint("[FRUIT] ========== FRUIT FARM START ==========")
     isFruitFarming = true
@@ -1714,6 +1913,21 @@ task.spawn(function()
             print("[SYSTEM] 📈 Level " .. level .. " - Normal Farm (Melee)")
             task.wait(60) -- เช็คใหม่ทุก 60 วิ
             continue
+        end
+
+        -- ===== PRIORITY 0: เช็ค Artifacts ที่ Level 4000 =====
+        if level >= 4000 then
+            print("[SYSTEM] 💎 Level >= 4000 → Checking Artifacts...")
+            if not checkArtifactsUnlocked() then
+                print("[SYSTEM] 🔓 Unlocking Artifacts...")
+                local unlocked = unlockArtifacts()
+                if unlocked then
+                    print("[SYSTEM] ✅ Artifacts unlocked! Equipping...")
+                    equipArtifacts()
+                end
+            else
+                print("[SYSTEM] ✅ Artifacts already unlocked")
+            end
         end
 
         -- ===== PRIORITY 1: เช็ค Dark Blade ก่อนเสมอ =====
