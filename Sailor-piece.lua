@@ -26,7 +26,7 @@ _G.Config = {
     DarkBladeMoney  = 250000,   -- Money ที่ต้องใช้
 
     -- Fruit Farm (ฟาร์มหาผลปีศาจ)
-    FruitFarm       = true,     -- เปิด/ปิดการฟาร์มผล
+    FruitFarm       = false,     -- เปิด/ปิดการฟาร์มผล
     FruitMinLevel   = 11500,    -- Level ขั้นต่ำที่จะเริ่มฟาร์มผล
     TargetFruit     = "Quake",  -- ผลที่ต้องการ
     FruitFarmIsland = "Shinjuku", -- เกาะที่จะฟาร์ม
@@ -47,6 +47,7 @@ _G.Config = {
     LogTags = {
         "[SYSTEM]", "[FARM]", "[HAKI", "[WEAPON",
         "[HORST]", "[STATS]", "[QUEST]", "[INVENTORY]",
+        "[FRUIT]", "[DEBUG]",
     },
 }
 
@@ -841,54 +842,94 @@ end
 -- [10] FRUIT FARM SYSTEM
 -- ═══════════════════════════════════════════════════════════════
 local function checkHasFruit(fruitName)
-    -- เช็คว่ามีผลในมือหรือ Backpack
+    oldPrint("[FRUIT] 🔍 Checking for", fruitName, "...")
+    
+    -- เช็คว่ามีผลในมือหรือ Backpack ก่อน (ใช้ string.find เพราะชื่อจริงคือ "Quake Fruit")
     local char = player.Character
     local backpack = player:FindFirstChild("Backpack")
     
-    if char and char:FindFirstChild(fruitName) then
-        return true
-    end
-    
-    if backpack and backpack:FindFirstChild(fruitName) then
-        return true
-    end
-    
-    -- เช็คผ่าน Inventory Remote
-    local hasFruit = false
-    pcall(function()
-        RS.Remotes.UpdateInventory.OnClientEvent:Connect(function(tab, data)
-            for _, item in pairs(data) do
-                if item.name == fruitName then
-                    hasFruit = true
-                end
+    -- เช็คใน Character
+    if char then
+        for _, tool in pairs(char:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:find(fruitName) then
+                oldPrint("[FRUIT] ✅ Found", tool.Name, "in Character")
+                return true  -- return ทันที!
             end
-        end)
+        end
+    end
+    
+    -- เช็คใน Backpack
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:find(fruitName) then
+                oldPrint("[FRUIT] ✅ Found", tool.Name, "in Backpack")
+                return true  -- return ทันที!
+            end
+        end
+    end
+    
+    -- ถ้าไม่เจอใน Character/Backpack → เช็คผ่าน Inventory Remote
+    oldPrint("[FRUIT] 🔍 Not in Character/Backpack, checking Inventory Remote...")
+    local hasFruit = false
+    local connection = nil
+    
+    connection = RS.Remotes.UpdateInventory.OnClientEvent:Connect(function(tab, data)
+        for _, item in pairs(data) do
+            if item.name and item.name:find(fruitName) then
+                hasFruit = true
+                oldPrint("[FRUIT] ✅ Found", item.name, "in Inventory!")
+            end
+        end
+        if connection then
+            connection:Disconnect()
+        end
+    end)
+    
+    pcall(function()
         RS.Remotes.RequestInventory:FireServer()
     end)
-    task.wait(0.5)
+    
+    task.wait(1)
+    
+    if connection then
+        connection:Disconnect()
+    end
+    
+    if hasFruit then
+        oldPrint("[FRUIT] ✅ Has", fruitName)
+    else
+        oldPrint("[FRUIT] ❌ No", fruitName)
+    end
+    
     return hasFruit
 end
 
 local function equipFruit(fruitName)
     print("[FRUIT] 🍎 Equipping fruit:", fruitName)
     
-    -- ลอง Equip จาก Backpack
+    -- ลอง Equip จาก Backpack (ใช้ string.find)
     local backpack = player:FindFirstChild("Backpack")
     if backpack then
-        local fruit = backpack:FindFirstChild(fruitName)
-        if fruit then
-            local char = player.Character
-            if char and char:FindFirstChild("Humanoid") then
-                char.Humanoid:EquipTool(fruit)
-                task.wait(1)
-                return true
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:find(fruitName) then
+                local char = player.Character
+                if char and char:FindFirstChild("Humanoid") then
+                    print("[FRUIT] 🎯 Equipping:", tool.Name)
+                    char.Humanoid:EquipTool(tool)
+                    task.wait(1)
+                    return true
+                end
             end
         end
     end
     
-    -- ลอง Equip ผ่าน Remote
+    -- ลอง Equip ผ่าน Remote (ลองทั้งชื่อเต็มและชื่อสั้น)
     pcall(function()
         RS:WaitForChild("Remotes"):WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", fruitName}))
+    end)
+    task.wait(0.5)
+    pcall(function()
+        RS:WaitForChild("Remotes"):WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", fruitName .. " Fruit"}))
     end)
     task.wait(1)
     
@@ -896,41 +937,149 @@ local function equipFruit(fruitName)
 end
 
 local function buyRandomFruit()
-    print("[FRUIT] 🎲 Buying random fruit from GemFruitDealer...")
+    oldPrint("[FRUIT] 🎲 Buying random fruit...")
     
-    local dealerNPC = workspace:FindFirstChild("ServiceNPCs")
-    if dealerNPC then
-        dealerNPC = dealerNPC:FindFirstChild("GemFruitDealer")
+    -- ตำแหน่ง GemFruitDealer NPC
+    local npcCF = CFrame.new(400.641937, 2.79983521, 752.175842, 0.444819272, 0, 0.895620406, 0, 1, 0, -0.895620406, 0, 0.444819272)
+    
+    -- 1. tweenPos ไปหา NPC
+    tweenPos(npcCF)
+    task.wait(3)
+    
+    -- 2. TP ชิด NPC
+    local char = player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.CFrame = npcCF * CFrame.new(0, 0, -3)
     end
+    task.wait(1)
     
-    if not dealerNPC then
-        print("[FRUIT] ❌ GemFruitDealer not found")
-        return false
-    end
+    -- 3. หา Prompt ใน GemFruitDealer
+    local prompt = nil
+    pcall(function()
+        local npc = workspace.ServiceNPCs.GemFruitDealer
+        for _, desc in pairs(npc:GetDescendants()) do
+            if desc:IsA("ProximityPrompt") then
+                prompt = desc
+                break
+            end
+        end
+    end)
     
-    local hrp = dealerNPC:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        print("[FRUIT] ❌ GemFruitDealer HRP not found")
-        return false
-    end
-    
-    local prompt = hrp:FindFirstChild("FruitDealerPrompt")
     if not prompt then
-        print("[FRUIT] ❌ FruitDealerPrompt not found")
+        oldPrint("[FRUIT] ❌ Prompt not found!")
         return false
     end
     
-    -- Teleport to dealer
-    local dealerPos = CFrame.new(hrp.Position)
-    tweenPos(dealerPos)
-    task.wait(2)
-    
-    -- Fire prompt
+    -- 4. กดซื้อ
+    oldPrint("[FRUIT] 💰 Firing prompt...")
     prompt.MaxActivationDistance = math.huge
     fireproximityprompt(prompt)
     task.wait(3)
     
     return true
+end
+
+-- เช็คว่าได้ผลอะไรจาก Backpack/Character (เฉพาะผลที่ยังไม่ได้กิน - มี FruitData)
+local function getAnyFruitFromBackpack()
+    local backpack = player:FindFirstChild("Backpack")
+    local char = player.Character
+    
+    -- เช็คใน Backpack (เฉพาะผลปีศาจ)
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool:FindFirstChild("FruitData") then
+                oldPrint("[FRUIT] 📦 Found fruit in Backpack:", tool.Name)
+                return tool
+            end
+        end
+    end
+    
+    -- เช็คใน Character (เฉพาะผลปีศาจที่ยังไม่ได้กิน)
+    if char then
+        for _, tool in pairs(char:GetChildren()) do
+            if tool:IsA("Tool") and tool:FindFirstChild("FruitData") then
+                oldPrint("[FRUIT] 📦 Found fruit in Character:", tool.Name)
+                return tool
+            end
+        end
+    end
+    
+    return nil
+end
+
+-- กินผลทิ้ง (Equip → Activate → กด Yes ใน ConfirmUI)
+local function eatFruit(fruitTool)
+    if not fruitTool then return end
+    
+    local fruitName = fruitTool.Name
+    oldPrint("[FRUIT] 🍽️ Eating fruit:", fruitName)
+    
+    local char = player.Character
+    local humanoid = char and char:FindFirstChild("Humanoid")
+    local backpack = player:FindFirstChild("Backpack")
+    
+    -- 1. Equip ผล
+    if humanoid and fruitTool.Parent == backpack then
+        oldPrint("[FRUIT] 📦 Equipping fruit...")
+        humanoid:EquipTool(fruitTool)
+        task.wait(0.5)
+    end
+    
+    -- 2. Activate ผล → เปิด ConfirmUI
+    oldPrint("[FRUIT] 🔨 Activating fruit to open ConfirmUI...")
+    pcall(function()
+        fruitTool:Activate()
+    end)
+    task.wait(1)
+    
+    -- 3. หา ConfirmUI และกด Yes
+    local confirmUI = player.PlayerGui:FindFirstChild("ConfirmUI")
+    if confirmUI and confirmUI.Enabled then
+        oldPrint("[FRUIT] ✅ ConfirmUI found, clicking Yes...")
+        local yesButton = confirmUI:FindFirstChild("MainFrame")
+        if yesButton then
+            yesButton = yesButton:FindFirstChild("ButtonsHolder")
+        end
+        if yesButton then
+            yesButton = yesButton:FindFirstChild("Yes")
+        end
+        
+        if yesButton then
+            -- วิธี 1: กดปุ่ม Yes
+            pcall(function()
+                for _, connection in pairs(getconnections(yesButton.MouseButton1Click)) do
+                    connection:Fire()
+                end
+            end)
+            oldPrint("[FRUIT] 🖱️ Clicked Yes button")
+        end
+    else
+        -- ถ้าไม่มี UI → ยิง remote ตรงๆ
+        oldPrint("[FRUIT] ⚠️ No ConfirmUI, firing FruitAction remote directly...")
+        pcall(function()
+            RemoteEvents:WaitForChild("FruitAction"):FireServer("eat", fruitName)
+        end)
+    end
+    
+    task.wait(3)
+    
+    -- 4. เช็คว่าผลหาย FruitData หรือยัง (Quake จะอยู่ใน Character แต่ FruitData จะหาย)
+    local fruitTool = nil
+    if backpack then
+        fruitTool = backpack:FindFirstChild(fruitName)
+    end
+    if not fruitTool and char then
+        fruitTool = char:FindFirstChild(fruitName)
+    end
+    
+    if fruitTool and fruitTool:FindFirstChild("FruitData") then
+        oldPrint("[FRUIT] ⚠️ Fruit still has FruitData - trying to destroy...")
+        pcall(function()
+            fruitTool:Destroy()
+        end)
+    else
+        oldPrint("[FRUIT] ✅ Ate fruit successfully:", fruitName)
+    end
 end
 
 local function allocateStatsPowerFirst()
@@ -946,7 +1095,7 @@ local function allocateStatsPowerFirst()
         return
     end
     
-    -- อัพ Power ให้ถึง 11500 ก่อน
+    -- อัพ Power ให้ถึง 11500 ก่อน (ส่ง batch ทีละ 100)
     local powerStat = 0
     pcall(function()
         powerStat = player.Data.Power.Value or 0
@@ -956,79 +1105,115 @@ local function allocateStatsPowerFirst()
         local needed = 11500 - powerStat
         local toAllocate = math.min(needed, points)
         
-        print("[FRUIT] 🔥 Allocating", toAllocate, "points to Power")
-        for i = 1, toAllocate do
+        print("[FRUIT] 🔥 Allocating", toAllocate, "points to Power (batch)")
+        local remaining = toAllocate
+        while remaining > 0 do
+            local batch = math.min(100, remaining)
             pcall(function()
-                statRemote:FireServer("Power")
+                statRemote:FireServer("Power", batch)
             end)
-            task.wait(0.05)
+            remaining = remaining - batch
+            task.wait(0.1)
         end
         
         points = points - toAllocate
     end
     
-    -- อัพ Sword ที่เหลือ
+    -- อัพ Sword ที่เหลือ (ส่ง batch ทีละ 100)
     if points > 0 then
-        print("[FRUIT] ⚔️ Allocating", points, "points to Sword")
-        for i = 1, points do
+        print("[FRUIT] ⚔️ Allocating", points, "points to Sword (batch)")
+        local remaining = points
+        while remaining > 0 do
+            local batch = math.min(100, remaining)
             pcall(function()
-                statRemote:FireServer("Sword")
+                statRemote:FireServer("Sword", batch)
             end)
-            task.wait(0.05)
+            remaining = remaining - batch
+            task.wait(0.1)
         end
     end
     
     print("[FRUIT] ✅ Stats allocated!")
 end
 
+local function fruitFarmLoop()
+    print("[FRUIT FARM] 🍎 Starting AFK Fruit Farm Loop...")
+    
+    local keyCodes = {Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V}
+    
+    while _G.Config.FruitFarm and isFruitFarming do
+        task.wait(0.5)
+        
+        local char = player.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+        if char.Humanoid.Health <= 0 then continue end
+        
+        local hrp = char.HumanoidRootPart
+        local lockPos = _G.Config.FruitFarmPos
+        
+        -- ล็อคตำแหน่ง
+        if (hrp.Position - lockPos.Position).Magnitude > 5 then
+            hrp.CFrame = lockPos
+        end
+        
+        -- Equip ผล
+        local targetFruit = _G.Config.TargetFruit
+        equipFruit(targetFruit)
+        
+        -- เปิด Haki + Observation Haki
+        pcall(function() RemoteEvents:WaitForChild("HakiRemote"):FireServer("Toggle") end)
+        pcall(function() RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle") end)
+        
+        -- ใช้สกิลผลปีศาจ (Z, X, C, V) - ใช้ FruitPowerRemote (ตาม dex)
+        for i, keyCode in ipairs(keyCodes) do
+            pcall(function()
+                local args = {
+                    "UseAbility",
+                    {
+                        TargetPosition = hrp.Position,
+                        FruitPower = targetFruit,
+                        KeyCode = keyCode
+                    }
+                }
+                RemoteEvents:WaitForChild("FruitPowerRemote"):FireServer(unpack(args))
+            end)
+            task.wait(0.3)
+        end
+        
+        task.wait(1.5) -- รอ 1.5 วิก่อนใช้สกิลรอบถัดไป
+    end
+    
+    print("[FRUIT FARM] ❌ Fruit Farm Loop ended")
+end
+
 local function startFruitFarm()
-    print("[FRUIT] ========== FRUIT FARM START ==========")
+    oldPrint("[FRUIT] ========== FRUIT FARM START ==========")
     isFruitFarming = true
     
     local targetFruit = _G.Config.TargetFruit
     
     -- 1. เช็คว่ามีผลแล้วหรือยัง
-    if checkHasFruit(targetFruit) then
-        print("[FRUIT] ✅ Already have", targetFruit)
-        equipFruit(targetFruit)
-        isFruitFarming = false
-        return true
-    end
+    oldPrint("[FRUIT] STEP 1: checkHasFruit...")
+    local hasFruitAlready = checkHasFruit(targetFruit)
+    oldPrint("[FRUIT] STEP 1 result:", tostring(hasFruitAlready))
     
-    -- 2. Reset Stats
-    print("[FRUIT] 🔄 Resetting stats...")
-    pcall(function()
-        RemoteEvents:WaitForChild("ResetStats"):FireServer()
-    end)
-    task.wait(3)
-    
-    -- 3. Allocate Stats: Power 11500 → Sword
-    allocateStatsPowerFirst()
-    task.wait(2)
-    
-    -- 4. สุ่มซื้อผลจนได้ตัวที่ต้องการ
-    local maxAttempts = 50
-    while not checkHasFruit(targetFruit) and maxAttempts > 0 do
-        maxAttempts = maxAttempts - 1
-        print("[FRUIT] 🎲 Attempt", 50 - maxAttempts, "- Buying random fruit...")
+    if hasFruitAlready then
+        oldPrint("[FRUIT] ✅ Already have", targetFruit)
         
-        buyRandomFruit()
-        task.wait(2)
-        
-        if checkHasFruit(targetFruit) then
-            print("[FRUIT] 🎉 Got", targetFruit, "!")
-            break
+        -- กินผลก่อนไปฟาร์ม (ทุกครั้ง!)
+        local fruitTool = getAnyFruitFromBackpack()
+        if fruitTool then
+            oldPrint("[FRUIT] 🍽️ Eating target fruit before farming:", fruitTool.Name)
+            eatFruit(fruitTool)
+            task.wait(2)
         else
-            print("[FRUIT] ❌ Not", targetFruit, "- trying again...")
+            oldPrint("[FRUIT] ⚠️ No fruit tool found in Backpack/Character!")
         end
-    end
-    
-    -- 5. Equip ผล
-    if checkHasFruit(targetFruit) then
+        
         equipFruit(targetFruit)
         
-        -- 6. Teleport to farm position
-        print("[FRUIT] 🌴 Teleporting to farm position...")
+        -- ไปฟาร์มต่อเลย (ไม่รีสเตตัส!)
+        oldPrint("[FRUIT] STEP 6: Teleporting to farm position...")
         local island = _G.Config.FruitFarmIsland
         local pos = _G.Config.FruitFarmPos
         
@@ -1045,12 +1230,116 @@ local function startFruitFarm()
             end
         end
         
-        print("[FRUIT] ✅ Fruit farm setup complete!")
-        -- ไม่ปิด isFruitFarming → ให้ fruitFarmLoop ทำงานต่อ
-        task.spawn(fruitFarmLoop) -- เริ่ม AFK loop
+        oldPrint("[FRUIT] ✅ Fruit farm setup complete!")
+        task.spawn(fruitFarmLoop)
+        return true
+    end
+    
+    -- 2. เช็คว่ารีสเตตัสแล้วหรือยัง (เช็คจาก Power stat จริงๆ)
+    local currentPower = 0
+    pcall(function()
+        currentPower = player.Data.Power.Value or 0
+    end)
+    
+    if currentPower < 11500 then
+        oldPrint("[FRUIT] STEP 2: Reset Stats (Power < 11500)...")
+        pcall(function()
+            RemoteEvents:WaitForChild("ResetStats"):FireServer()
+        end)
+        task.wait(3)
+        oldPrint("[FRUIT] STEP 2: Reset Stats done")
+        
+        -- 3. Allocate Stats: Power 11500 → Sword
+        oldPrint("[FRUIT] STEP 3: Allocate Stats...")
+        local ok3, err3 = pcall(allocateStatsPowerFirst)
+        if not ok3 then
+            oldPrint("[FRUIT] STEP 3 ERROR:", tostring(err3))
+        else
+            oldPrint("[FRUIT] STEP 3: Stats allocated OK")
+        end
+        task.wait(2)
+    else
+        oldPrint("[FRUIT] ⏭️ STEP 2-3: Power already >= 11500, skipping reset...")
+    end
+    
+    -- 4. สุ่มซื้อผลจนได้ตัวที่ต้องการ
+    oldPrint("[FRUIT] STEP 4: Starting buy loop...")
+    local maxAttempts = 100
+    local attemptNum = 0
+    local gotTarget = false
+    
+    while maxAttempts > 0 and not gotTarget do
+        maxAttempts = maxAttempts - 1
+        attemptNum = attemptNum + 1
+        oldPrint("[FRUIT] ══════════════════════════════════")
+        oldPrint("[FRUIT] 🎲 Attempt " .. attemptNum .. " / 100")
+        
+        -- 4a. ซื้อผลสุ่ม
+        local ok4, err4 = pcall(buyRandomFruit)
+        if not ok4 then
+            oldPrint("[FRUIT] ❌ buyRandomFruit ERROR:", tostring(err4))
+            task.wait(2)
+        else
+            -- 4b. รอให้ผลโหลดเข้า Backpack (เพิ่มเวลารอ)
+            oldPrint("[FRUIT] ⏳ Waiting for fruit to load into Backpack...")
+            task.wait(3)
+            local fruitTool = getAnyFruitFromBackpack()
+            
+            if fruitTool then
+                oldPrint("[FRUIT] 🍎 Got: " .. fruitTool.Name)
+                
+                -- เช็คว่าชื่อผลมี targetFruit อยู่ในนั้นหรือไม่ (เช่น "Quake Fruit" มี "Quake")
+                local isTargetFruit = fruitTool.Name:find(targetFruit) ~= nil
+                
+                if isTargetFruit then
+                    -- ได้ผลที่ต้องการ! → กินผลก่อนไปฟาร์ม
+                    oldPrint("[FRUIT] 🎉🎉🎉 GOT TARGET FRUIT: " .. fruitTool.Name .. " !!! 🎉🎉🎉")
+                    oldPrint("[FRUIT] 🍽️ Eating target fruit...")
+                    eatFruit(fruitTool)
+                    task.wait(2)
+                    gotTarget = true
+                else
+                    -- ไม่ใช่ผลที่ต้องการ → กินทิ้ง
+                    oldPrint("[FRUIT] ❌ Not " .. targetFruit .. " → Eating " .. fruitTool.Name .. "...")
+                    eatFruit(fruitTool)
+                    task.wait(2)
+                end
+            else
+                oldPrint("[FRUIT] ⚠️ No fruit found in Backpack after buying!")
+                task.wait(2)
+            end
+        end
+    end
+    
+    -- 5. Equip ผล
+    oldPrint("[FRUIT] STEP 5: Check final result...")
+    if checkHasFruit(targetFruit) then
+        oldPrint("[FRUIT] ✅ Got " .. targetFruit .. "! Equipping...")
+        equipFruit(targetFruit)
+        
+        -- 6. Teleport to farm position
+        oldPrint("[FRUIT] STEP 6: Teleporting to farm position...")
+        local island = _G.Config.FruitFarmIsland
+        local pos = _G.Config.FruitFarmPos
+        
+        pcall(function()
+            tpRemote:FireServer(island)
+        end)
+        task.wait(3)
+        
+        local char = player.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            for i = 1, 10 do
+                char.HumanoidRootPart.CFrame = pos
+                task.wait(0.1)
+            end
+        end
+        
+        oldPrint("[FRUIT] ✅ Fruit farm setup complete!")
+        task.spawn(fruitFarmLoop)
         return true
     else
-        print("[FRUIT] ❌ Failed to get", targetFruit)
+        oldPrint("[FRUIT] ❌ Failed to get " .. targetFruit)
         isFruitFarming = false
         return false
     end
@@ -1275,46 +1564,6 @@ local function equipToolByName(toolName, char)
     return tool
 end
 
-local function fruitFarmLoop()
-    print("[FRUIT FARM] 🍎 Starting AFK Fruit Farm Loop...")
-    
-    while _G.Config.FruitFarm and isFruitFarming do
-        task.wait(0.5)
-        
-        local char = player.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
-        if char.Humanoid.Health <= 0 then continue end
-        
-        local hrp = char.HumanoidRootPart
-        local lockPos = _G.Config.FruitFarmPos
-        
-        -- ล็อคตำแหน่ง
-        if (hrp.Position - lockPos.Position).Magnitude > 5 then
-            hrp.CFrame = lockPos
-        end
-        
-        -- Equip ผล
-        local targetFruit = _G.Config.TargetFruit
-        equipFruit(targetFruit)
-        
-        -- เปิด Haki + Observation Haki
-        pcall(function() RemoteEvents:WaitForChild("HakiRemote"):FireServer("Toggle") end)
-        pcall(function() RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle") end)
-        
-        -- ใช้สกิลทั้งหมด (Z, X, C, V) - ผลปีศาจใช้ AbilitySystem เหมือนกัน
-        for i = 1, 4 do
-            pcall(function()
-                RS:WaitForChild("AbilitySystem"):WaitForChild("Remotes"):WaitForChild("RequestAbility"):FireServer(i)
-            end)
-            task.wait(0.3)
-        end
-        
-        task.wait(1.5) -- รอ 1.5 วิก่อนใช้สกิลรอบถัดไป
-    end
-    
-    print("[FRUIT FARM] ❌ Fruit Farm Loop ended")
-end
-
 local function farmLoop()
     while _G.Config.AutoFarm do
         task.wait()
@@ -1460,40 +1709,6 @@ task.spawn(function()
         pcall(function() level = player.Data.Level.Value or 0 end)
         print("[SYSTEM] 🔍 Level check:", level)
 
-        -- ===== PRIORITY 1: Fruit Farm (Level >= FruitMinLevel) =====
-        if _G.Config.FruitFarm and level >= _G.Config.FruitMinLevel then
-            print("[SYSTEM] 🍎 Level " .. level .. " >= " .. _G.Config.FruitMinLevel .. " → Checking Fruit Farm...")
-            
-            local hasFruit = checkHasFruit(_G.Config.TargetFruit)
-            if hasFruit then
-                print("[SYSTEM] ✅ Already have " .. _G.Config.TargetFruit .. " → Fruit Farm Mode!")
-                isFruitFarming = true -- ตั้ง flag
-                equipFruit(_G.Config.TargetFruit)
-                
-                -- Teleport to fruit farm position
-                local island = _G.Config.FruitFarmIsland
-                local pos = _G.Config.FruitFarmPos
-                pcall(function() tpRemote:FireServer(island) end)
-                task.wait(3)
-                
-                local char = player.Character
-                if char and char:FindFirstChild("HumanoidRootPart") then
-                    for i = 1, 10 do
-                        char.HumanoidRootPart.CFrame = pos
-                        task.wait(0.1)
-                    end
-                end
-                
-                -- เริ่ม AFK Fruit Farm Loop
-                task.spawn(fruitFarmLoop)
-                break -- ออกจาก loop → ให้ fruitFarmLoop ทำงาน
-            else
-                print("[SYSTEM] ❌ No " .. _G.Config.TargetFruit .. " → Starting Fruit Farm process...")
-                pcall(startFruitFarm)
-                break -- ออกจาก loop หลังตั้งค่า Fruit Farm เสร็จ
-            end
-        end
-
         -- ===== Level < HakiMinLevel → ฟาร์มปกติ =====
         if level < _G.Config.HakiMinLevel then
             print("[SYSTEM] 📈 Level " .. level .. " - Normal Farm (Melee)")
@@ -1501,8 +1716,7 @@ task.spawn(function()
             continue
         end
 
-        -- ===== Level >= HakiMinLevel =====
-        -- STEP 1: เช็ค Dark Blade ก่อนเลย
+        -- ===== PRIORITY 1: เช็ค Dark Blade ก่อนเสมอ =====
         print("[SYSTEM] 🗡️ Checking Dark Blade...")
         local hasBlade = findDarkBladeInHand() ~= nil
         if not hasBlade then
@@ -1510,8 +1724,50 @@ task.spawn(function()
         end
 
         if hasBlade then
-            print("[SYSTEM] ✅ Dark Blade found! Normal Farm...")
-            break -- มีดาบแล้ว → ออกจาก loop ไปฟาร์มปกติ
+            print("[SYSTEM] ✅ Dark Blade found!")
+            
+            -- ถ้ามีดาบแล้ว + Level >= FruitMinLevel → เช็ค Fruit Farm
+            if _G.Config.FruitFarm and level >= _G.Config.FruitMinLevel then
+                print("[SYSTEM] 🍎 Level " .. level .. " >= " .. _G.Config.FruitMinLevel .. " → Checking Fruit Farm...")
+                
+                local hasFruit = checkHasFruit(_G.Config.TargetFruit)
+                if hasFruit then
+                    print("[SYSTEM] ✅ Already have " .. _G.Config.TargetFruit .. " → Fruit Farm Mode!")
+                    isFruitFarming = true
+                    equipFruit(_G.Config.TargetFruit)
+                    
+                    -- Teleport to fruit farm position
+                    local island = _G.Config.FruitFarmIsland
+                    local pos = _G.Config.FruitFarmPos
+                    pcall(function() tpRemote:FireServer(island) end)
+                    task.wait(3)
+                    
+                    local char = player.Character
+                    if char and char:FindFirstChild("HumanoidRootPart") then
+                        for i = 1, 10 do
+                            char.HumanoidRootPart.CFrame = pos
+                            task.wait(0.1)
+                        end
+                    end
+                    
+                    task.spawn(fruitFarmLoop)
+                    break
+                else
+                    print("[SYSTEM] ❌ No " .. _G.Config.TargetFruit .. " → Starting Fruit Farm process...")
+                    oldPrint("[DEBUG] About to call startFruitFarm...")
+                    local ok, err = pcall(startFruitFarm)
+                    if ok then
+                        oldPrint("[DEBUG] startFruitFarm completed OK")
+                    else
+                        oldPrint("[DEBUG] startFruitFarm ERROR:", tostring(err))
+                    end
+                    break
+                end
+            else
+                -- มีดาบแล้ว แต่ยังไม่ถึง FruitMinLevel → ฟาร์มปกติ
+                print("[SYSTEM] ✅ Dark Blade found! Normal Farm...")
+                break
+            end
         end
 
         -- STEP 2: ไม่มีดาบ → เช็ค Haki
