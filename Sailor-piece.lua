@@ -26,7 +26,7 @@ _G.Config = {
     DarkBladeMoney  = 250000,   -- Money ที่ต้องใช้
 
     -- Fruit Farm (ฟาร์มหาผลปีศาจ)
-    FruitFarm       = true,     -- เปิด/ปิดการฟาร์มผล
+    FruitFarm       = false,     -- เปิด/ปิดการฟาร์มผล
     FruitMinLevel   = 11500,    -- Level ขั้นต่ำที่จะเริ่มฟาร์มผล
     TargetFruit     = "Quake",  -- ผลที่ต้องการ
     FruitFarmIsland = "Shinjuku", -- เกาะที่จะฟาร์ม
@@ -532,6 +532,26 @@ task.spawn(function()
             end
         end)
 
+        -- Observation Haki status (safe)
+        local obsHakiStatus = "❌"
+        pcall(function()
+            local statsUI = player.PlayerGui:FindFirstChild("StatsPanelUI")
+            if not statsUI then return end
+            for _, desc in pairs(statsUI:GetDescendants()) do
+                if desc.Name:find("Observation") and desc:IsA("Frame") and desc.Visible == true then
+                    -- หา level text
+                    for _, child in pairs(desc:GetDescendants()) do
+                        if child:IsA("TextLabel") and child.Text:find("Lv") then
+                            obsHakiStatus = "✅ Obs " .. child.Text
+                            break
+                        end
+                    end
+                    if obsHakiStatus == "❌" then obsHakiStatus = "✅ Obs Haki" end
+                    break
+                end
+            end
+        end)
+
         -- Inventory summary
         local totalItems = 0
         local itemLists = {Secret={},Mythical={},Legendary={},Epic={},Rare={},Uncommon={},Common={}}
@@ -581,7 +601,7 @@ task.spawn(function()
         
         -- Build message
         local extraInfo = " 🌀Aura:" .. auraCount .. " 🎁Cosmetic:" .. cosmeticCrateCount .. " 🔄Clan:" .. clanRerollCount .. " 🎭Trait:" .. traitRerollCount .. " 🧬Race:" .. raceRerollCount
-        local message = hakiStatus .. " ⭐LVL " .. level .. " 💰" .. formatNumber(money) .. " 💎" .. formatNumber(gems) .. extraInfo
+        local message = hakiStatus .. " " .. obsHakiStatus .. " ⭐LVL " .. level .. " 💰" .. formatNumber(money) .. " 💎" .. formatNumber(gems) .. extraInfo
         print("[HORST]", message)
 
         -- Important items
@@ -1414,7 +1434,118 @@ local function equipArtifacts()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- [12] FRUIT FARM SYSTEM
+-- [12] OBSERVATION HAKI BUY SYSTEM (Level 6000+)
+-- ═══════════════════════════════════════════════════════════════
+local function checkHasObservationHaki()
+    -- เช็คว่ามี Observation Haki แล้วหรือยัง (ใช้ HakiRemote GetProgression)
+    local hasObs = false
+    pcall(function()
+        local data = RemoteEvents:WaitForChild("HakiRemote"):FireServer("GetProgression")
+        -- เช็คจาก UI: ถ้ามี ObservationHaki UI visible = มีแล้ว
+        local statsUI = player.PlayerGui:FindFirstChild("StatsPanelUI")
+        if statsUI then
+            for _, desc in pairs(statsUI:GetDescendants()) do
+                if desc.Name:find("Observation") and desc:IsA("Frame") and desc.Visible == true then
+                    hasObs = true
+                    break
+                end
+            end
+        end
+    end)
+    
+    -- Fallback: เช็คว่า ObservationHakiRemote ตอบกลับได้ไหม
+    if not hasObs then
+        pcall(function()
+            RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle")
+            task.wait(0.3)
+            RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle")
+            -- ถ้าไม่ error = มี Obs Haki แล้ว
+            -- ลองดูจาก Character ว่ามี effect
+            local char = player.Character
+            if char then
+                for _, v in pairs(char:GetDescendants()) do
+                    if v.Name:find("Observation") or v.Name:find("observation") then
+                        hasObs = true
+                        break
+                    end
+                end
+            end
+        end)
+    end
+    
+    oldPrint("[OBS HAKI] Check hasObservationHaki:", tostring(hasObs))
+    return hasObs
+end
+
+local function buyObservationHaki()
+    oldPrint("[OBS HAKI] ========== BUY OBSERVATION HAKI START ==========")
+    
+    -- 1. เช็คว่ามีแล้วหรือยัง
+    if checkHasObservationHaki() then
+        oldPrint("[OBS HAKI] ⏭️ Already have Observation Haki, skipping...")
+        return true
+    end
+    
+    -- 2. วาปไป NPC
+    oldPrint("[OBS HAKI] 📍 Teleporting to ObservationBuyer NPC...")
+    local npcCFrame = CFrame.new(-713.182922, 12.1339779, -527.289795, -0.763382077, 0, 0.645947695, 0, 1, 0, -0.645947695, 0, -0.763382077)
+    
+    tweenPos(npcCFrame)
+    task.wait(3)
+    
+    -- 3. หา Prompt และยิง
+    oldPrint("[OBS HAKI] 🔍 Finding ObservationHakiPrompt...")
+    local npc = workspace:FindFirstChild("ServiceNPCs")
+    if npc then npc = npc:FindFirstChild("ObservationBuyer") end
+    if npc then npc = npc:FindFirstChild("HumanoidRootPart") end
+    
+    local prompt = nil
+    if npc then
+        prompt = npc:FindFirstChild("ObservationHakiPrompt")
+    end
+    
+    if not prompt then
+        oldPrint("[OBS HAKI] ❌ ObservationHakiPrompt not found!")
+        return false
+    end
+    
+    oldPrint("[OBS HAKI] 💰 Firing ObservationHakiPrompt...")
+    prompt.MaxActivationDistance = math.huge
+    fireproximityprompt(prompt)
+    task.wait(2)
+    
+    -- 4. รอ ConfirmUI และกด Yes
+    oldPrint("[OBS HAKI] ⏳ Waiting for ConfirmUI...")
+    task.wait(1)
+    
+    local confirmUI = player.PlayerGui:FindFirstChild("ConfirmUI")
+    if confirmUI and confirmUI.Enabled then
+        oldPrint("[OBS HAKI] ✅ ConfirmUI found, clicking Yes...")
+        local yesButton = confirmUI:FindFirstChild("MainFrame")
+        if yesButton then yesButton = yesButton:FindFirstChild("ButtonsHolder") end
+        if yesButton then yesButton = yesButton:FindFirstChild("Yes") end
+        
+        if yesButton then
+            pcall(function()
+                for _, connection in pairs(getconnections(yesButton.MouseButton1Click)) do
+                    connection:Fire()
+                end
+            end)
+            oldPrint("[OBS HAKI] 🖱️ Clicked Yes button")
+        end
+    else
+        oldPrint("[OBS HAKI] ⚠️ No ConfirmUI found")
+    end
+    
+    task.wait(3)
+    
+    -- 5. เช็คว่าซื้อสำเร็จ
+    oldPrint("[OBS HAKI] ✅ Observation Haki purchase attempted!")
+    return true
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- [13] FRUIT FARM SYSTEM
 -- ═══════════════════════════════════════════════════════════════
 local function startFruitFarm()
     oldPrint("[FRUIT] ========== FRUIT FARM START ==========")
@@ -1958,6 +2089,17 @@ task.spawn(function()
                 end
             else
                 print("[SYSTEM] ✅ Artifacts already unlocked")
+            end
+        end
+
+        -- ===== PRIORITY 0.5: เช็ค Observation Haki ที่ Level 6000 =====
+        if level >= 6000 then
+            print("[SYSTEM] 👁️ Level >= 6000 → Checking Observation Haki...")
+            if not checkHasObservationHaki() then
+                print("[SYSTEM] 🔓 Buying Observation Haki...")
+                buyObservationHaki()
+            else
+                print("[SYSTEM] ✅ Observation Haki already owned")
             end
         end
 
