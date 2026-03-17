@@ -26,7 +26,7 @@ _G.Config = {
     DarkBladeMoney  = 250000,   -- Money ที่ต้องใช้
 
     -- Fruit Farm (ฟาร์มหาผลปีศาจ)
-    FruitFarm       = true,     -- เปิด/ปิดการฟาร์มผล
+    FruitFarm       = false,     -- เปิด/ปิดการฟาร์มผล
     FruitMinLevel   = 11500,    -- Level ขั้นต่ำที่จะเริ่มฟาร์มผล
     TargetFruit     = "Quake",  -- ผลที่ต้องการ
     FruitFarmIsland = "Shinjuku", -- เกาะที่จะฟาร์ม
@@ -1957,90 +1957,115 @@ local function farmLoop()
 
         else
             -- Quest ถูกต้อง → ไปฟาร์ม
-            tweenPos(CFrame.new(questInfo.position))
-            task.wait(4)
-
             local toolName = selectWeapon()
             local npcType = getNpcType(questInfo.npcName)
             if not npcType then continue end
 
-            print("[FARM] NPC:", npcType, "| Weapon:", toolName)
+            -- Equip ดาบก่อนเริ่มฟาร์ม
+            equipToolByName(toolName, char)
 
-            local closest = findNPC(npcType)
-
-            if not closest then
-                print("[FARM] ❌ NPC not found:", npcType)
-                task.wait(2)
-                continue
-            end
-
-            print("[FARM] Found:", closest.Name)
-
-            -- YPOS = 3 (ไม่ลอยบนหัว ชิดมอน)
+            -- YPOS
             local YPOS = 9
+            local firstMob = true
 
-            -- Selection box
-            local box = Instance.new("SelectionBox")
-            box.Adornee = closest
-            box.Color3 = Color3.fromRGB(0, 255, 0)
-            box.LineThickness = 0.08
-            box.SurfaceTransparency = 0.6
-            box.SurfaceColor3 = Color3.fromRGB(0, 255, 0)
-            box.Parent = workspace
+            -- วน loop ตีมอนต่อเนื่อง จนกว่าเควสจะเสร็จ/ตาย/เควสเปลี่ยน
+            while _G.Config.AutoFarm do
+                -- เช็คว่าเควสยังอยู่ไหม
+                if char.Humanoid.Health <= 0 then break end
+                if not questUI.Quest.Visible then break end
+                if questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text ~= questInfo.questTitle then break end
 
-            -- Combat loop: ใช้สกิลทั้งหมด + ชิดมอน
-            repeat task.wait()
+                local closest = findNPC(npcType)
 
-                if not closest or not closest.Parent
-                    or not closest:FindFirstChild("HumanoidRootPart")
-                    or closest.Humanoid.Health <= 0 then
-                    break
+                if not closest then
+                    -- หามอนไม่เจอ → วาปไปตำแหน่ง quest ครั้งแรกเท่านั้น
+                    if firstMob then
+                        print("[FARM] NPC:", npcType, "| Weapon:", toolName)
+                        tweenPos(CFrame.new(questInfo.position))
+                        task.wait(3)
+                    end
+                    task.wait(1)
+                    firstMob = false
+                    continue
                 end
+                firstMob = false
 
-                -- Equip weapon ทุกรอบ
+                print("[FARM] Found:", closest.Name)
+
+                -- Equip ดาบให้แน่ใจ
                 equipToolByName(toolName, char)
 
-                -- BodyVelocity
-                BodyVelocity.Velocity = Vector3.zero
-                BodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-                BodyVelocity.Parent = char.HumanoidRootPart
+                -- Selection box
+                local box = Instance.new("SelectionBox")
+                box.Adornee = closest
+                box.Color3 = Color3.fromRGB(0, 255, 0)
+                box.LineThickness = 0.08
+                box.SurfaceTransparency = 0.6
+                box.SurfaceColor3 = Color3.fromRGB(0, 255, 0)
+                box.Parent = workspace
 
-                -- Freeze NPC ถ้าเป็น owner
-                local success, owner = pcall(function()
-                    return closest.HumanoidRootPart:GetNetworkOwner()
-                end)
-                if success and owner == player then
-                    closest.HumanoidRootPart.CFrame = CFrame.new(closest.HumanoidRootPart.Position)
-                    closest.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-                    closest.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-                end
+                -- Skill combo index (วนสกิล 1-4)
+                local skillIndex = 1
 
-                -- tweenPos ชิดมอน (YPOS = 3)
-                tweenPos(
-                    CFrame.new(closest.HumanoidRootPart.Position + Vector3.new(0, YPOS, 0)) * CFrame.Angles(math.rad(-90), 0, 0),
-                    function()
-                        hitRemote:FireServer()
+                -- Combat loop: combo สกิล → ตีธรรมดา → สกิล → ตีธรรมดา
+                repeat task.wait()
+
+                    if not closest or not closest.Parent
+                        or not closest:FindFirstChild("HumanoidRootPart")
+                        or closest.Humanoid.Health <= 0 then
+                        break
                     end
-                )
 
-                -- Haki + Observation Haki
-                pcall(function() RemoteEvents:WaitForChild("HakiRemote"):FireServer("Toggle") end)
-                pcall(function() RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle") end)
+                    -- Equip weapon ทุกรอบ (ไม่ให้หลุดมือ)
+                    equipToolByName(toolName, char)
 
-                -- Ability 1-4 (weapon skills)
-                for i = 1, 4 do
-                    pcall(function()
-                        RS:WaitForChild("AbilitySystem"):WaitForChild("Remotes"):WaitForChild("RequestAbility"):FireServer(i)
+                    -- BodyVelocity
+                    BodyVelocity.Velocity = Vector3.zero
+                    BodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+                    BodyVelocity.Parent = char.HumanoidRootPart
+
+                    -- Freeze NPC ถ้าเป็น owner
+                    local success, owner = pcall(function()
+                        return closest.HumanoidRootPart:GetNetworkOwner()
                     end)
-                end
+                    if success and owner == player then
+                        closest.HumanoidRootPart.CFrame = CFrame.new(closest.HumanoidRootPart.Position)
+                        closest.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+                        closest.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+                    end
 
-                -- Normal attack
-                hitRemote:FireServer()
+                    -- tweenPos ชิดมอน
+                    tweenPos(
+                        CFrame.new(closest.HumanoidRootPart.Position + Vector3.new(0, YPOS, 0)) * CFrame.Angles(math.rad(-90), 0, 0),
+                        function()
+                            hitRemote:FireServer()
+                        end
+                    )
 
-            until char.Humanoid.Health <= 0 or not questUI.Quest.Visible or questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text ~= questInfo.questTitle
+                    -- Haki + Observation Haki
+                    pcall(function() RemoteEvents:WaitForChild("HakiRemote"):FireServer("Toggle") end)
+                    pcall(function() RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle") end)
 
-            box:Destroy()
-            print("[FARM] Exit Loop:", closest.Name)
+                    -- Combo: สกิล 1 ตัว → ตีธรรมดา → วน
+                    pcall(function()
+                        RS:WaitForChild("AbilitySystem"):WaitForChild("Remotes"):WaitForChild("RequestAbility"):FireServer(skillIndex)
+                    end)
+                    hitRemote:FireServer() -- ตีธรรมดาหลังสกิล (combo)
+                    
+                    skillIndex = skillIndex + 1
+                    if skillIndex > 4 then skillIndex = 1 end
+
+                until char.Humanoid.Health <= 0 or not questUI.Quest.Visible or questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text ~= questInfo.questTitle
+
+                box:Destroy()
+
+                -- Equip ดาบกลับหลังมอนตาย (ไม่ให้หลุดมือ)
+                equipToolByName(toolName, char)
+                print("[FARM] Killed:", closest.Name, "→ Finding next mob...")
+                task.wait(0.3) -- รอสั้นมากแล้วหามอนตัวต่อไปเลย
+            end
+
+            print("[FARM] Exit Farm Loop")
         end
     end
 end
