@@ -2533,7 +2533,7 @@ end)
 task.spawn(function()
     task.wait(10)
 
-    while _G.Configs.AutoFarm do
+    while _G.Configs["Auto Farm"] do
         local level = 0
         pcall(function() level = player.Data.Level.Value or 0 end)
         print("[SYSTEM] 🔍 Level check:", level)
@@ -2657,7 +2657,7 @@ task.spawn(function()
             
             -- ถ้ามีดาบแล้ว + Level >= FruitMinLevel → เช็ค Fruit Farm
             if _G.Configs["Fruit Farm"] and level >= _G.Configs["Fruit Min Level"] then
-                print("[SYSTEM] 🍎 Level " .. level .. " >= " .. _G.Configs.FruitMinLevel .. " → Checking Fruit Farm...")
+                print("[SYSTEM] 🍎 Level " .. level .. " >= " .. _G.Configs["Fruit Min Level"] .. " → Checking Fruit Farm...")
                 
                 local hasFruit = checkHasFruit(_G.Configs["Target Fruit"])
                 if hasFruit then
@@ -2706,7 +2706,7 @@ task.spawn(function()
         if hasHaki then
             -- STEP 3: มี Haki แต่ไม่มีดาบ → ซื้อดาบ
             print("[SYSTEM] ✅ Has Haki but no Dark Blade → Buying...")
-            if _G.Configs.BuyDarkBlade then
+            if _G.Configs["Buy Dark Blade"] then
                 pcall(buyDarkBlade)
             end
             print("[SYSTEM] 🗡️ Dark Blade process done! Normal Farm...")
