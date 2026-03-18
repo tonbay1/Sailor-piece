@@ -4,46 +4,70 @@
 repeat task.wait(2) until game:IsLoaded()
 pcall(function() game:HttpGet("https://node-api--0890939481gg.replit.app/join") end)
 
--- รอ 5 วินาทีก่อนเริ่มสคริปต์
-print("[SYSTEM] ⏳ Waiting 5 seconds before starting...")
-task.wait(5)
-print("[SYSTEM] ✅ Starting script...")
-
 -- ═══════════════════════════════════════════════════════════════
 -- [1] CONFIG - ตั้งค่าทั้งหมดที่นี่
 -- ═══════════════════════════════════════════════════════════════
--- Default config (ถ้าผู้ใช้ไม่ได้ตั้งค่า _G.Configs ก่อน loadstring)
-_G.Configs = _G.Configs or {
-    ["Auto Farm"] = true,
-    ["Auto Hit"] = true,
-    ["Auto Stats"] = true,
-    ["Fps Boost"] = true,
-    ["Horst Display"] = true,
-    ["Haki Quest"] = true,
-    ["Haki Min Level"] = 3000,
-    ["Haki Timeout"] = 3600,
-    ["Buy Dark Blade"] = true,
-    ["Dark Blade Gems"] = 150,
-    ["Dark Blade Money"] = 250000,
-    ["Fruit Farm"] = false,
-    ["Fruit Min Level"] = 11500,
-    ["Target Fruit"] = "Quake",
-    ["Fruit Farm Island"] = "Shinjuku",
-    ["Fruit Farm Pos"] = CFrame.new(321.706757, -1.539090, -1756.500977) * CFrame.Angles(0, -0.113749, 0),
-    ["Auto Buy Boss Key"] = true,
-    ["Boss Key Buy Interval"] = 1800,
-    ["Exchange Ichigo"] = true,
-    ["Ichigo Min Level"] = 11500,
-    ["Ichigo Boss Ticket Required"] = 500,
-    ["Farm Saber Boss"] = true,
-    ["Saber Boss Key"] = 1,
-    ["Saber Boss Money"] = 100000,
-    ["Saber Boss Gems"] = 175,
-    ["Stat Sword"] = 50,
-    ["Stat Defense"] = 30,
-    ["Stat Power"] = 20,
-    ["Game Settings"] = {"DisablePvP", "DisableVFX", "DisableOtherVFX", "RemoveTexture", "AutoSkillC", "RemoveShadows"},
-    ["Log Tags"] = {"[SYSTEM]", "[FARM]", "[HAKI", "[WEAPON", "[HORST]", "[STATS]", "[QUEST]", "[INVENTORY]", "[FRUIT]", "[DEBUG]", "[BOSS KEY]", "[SABER BOSS]", "[ICHIGO]"},
+_G.Config = {
+    -- ระบบหลัก (เปิด/ปิดแต่ละระบบ)
+    AutoFarm        = true,     -- ฟาร์มอัตโนมัติ
+    AutoHit         = true,     -- ตีอัตโนมัติ + สกิล Z
+    AutoStats       = true,     -- อัพสเตตัสอัตโนมัติ
+    FpsBoost        = true,     -- BlackScreen ลดแลค
+    HorstDisplay    = true,     -- แสดงข้อมูลผ่าน Horst
+
+    -- Haki Quest
+    HakiQuest       = true,     -- ทำภารกิจ Haki อัตโนมัติ
+    HakiMinLevel    = 3000,     -- Level ขั้นต่ำที่จะเริ่มทำ Haki
+    HakiTimeout     = 3600,     -- Timeout (วินาที) = 60 นาที
+
+    -- Dark Blade
+    BuyDarkBlade    = true,     -- ซื้อ Dark Blade หลังได้ Haki
+    DarkBladeGems   = 150,      -- Gems ที่ต้องใช้
+    DarkBladeMoney  = 250000,   -- Money ที่ต้องใช้
+
+    -- Fruit Farm (ฟาร์มหาผลปีศาจ)
+    FruitFarm       = false,     -- เปิด/ปิดการฟาร์มผล
+    FruitMinLevel   = 11500,    -- Level ขั้นต่ำที่จะเริ่มฟาร์มผล
+    TargetFruit     = "Quake",  -- ผลที่ต้องการ
+    FruitFarmIsland = "Shinjuku", -- เกาะที่จะฟาร์ม
+    FruitFarmPos    = CFrame.new(321.706757, -1.539090, -1756.500977) * CFrame.Angles(0, -0.113749, 0), -- ตำแหน่งฟาร์ม
+
+    -- Boss Key Auto Buy (ซื้อ Boss Key อัตโนมัติ)
+    AutoBuyBossKey  = true,       -- เปิด/ปิดการซื้อ Boss Key อัตโนมัติ
+    BossKeyBuyInterval = 1800,    -- ซื้อทุก 30 นาที (1800 วินาที)
+    
+    -- Ichigo Exchange (แลก Ichigo Sword ด้วย Boss Ticket)
+    ExchangeIchigo  = true,       -- เปิด/ปิดการแลก Ichigo
+    IchigoMinLevel  = 11500,      -- Level ขั้นต่ำที่จะเริ่มแลก
+    IchigoRequirements = {        -- ไอเทมที่ต้องการ
+        BossTicket = 500,         -- Boss Ticket 500 ชิ้น
+    },
+    
+    -- Saber Boss Farm (ฟาร์มบอส Saber เพื่อหาไอเทม)
+    FarmSaberBoss   = true,      -- เปิด/ปิดการฟาร์มบอส Saber
+    SaberBossSummonItems = {     -- ไอเทมสำหรับเรียก Saber Boss
+        BossKey = 1,             -- Boss Key 1 อัน
+        Money = 100000,          -- 100k Money
+        Gems = 175,              -- 175 Gems
+    },
+
+    -- Stats Distribution (รวม = 100%)
+    StatSword       = 50,       -- Sword 50%
+    StatDefense     = 30,       -- Defense 30%
+    StatPower       = 20,       -- Power 20%
+
+    -- Performance Settings
+    GameSettings = {
+        "DisablePvP", "DisableVFX", "DisableOtherVFX",
+        "RemoveTexture", "AutoSkillC", "RemoveShadows",
+    },
+
+    -- Log Filter (แสดงเฉพาะ tag เหล่านี้)
+    LogTags = {
+        "[SYSTEM]", "[FARM]", "[HAKI", "[WEAPON",
+        "[HORST]", "[STATS]", "[QUEST]", "[INVENTORY]",
+        "[FRUIT]", "[DEBUG]",
+    },
 }
 
 -- ═══════════════════════════════════════════════════════════════
@@ -114,7 +138,7 @@ print = function(...)
     end
 
     -- แสดงเฉพาะ log ที่อยู่ใน Config.LogTags
-    for _, tag in ipairs(_G.Configs["Log Tags"]) do
+    for _, tag in ipairs(_G.Config.LogTags) do
         if text:find(tag, 1, true) then
             oldPrint(...)
             return
@@ -382,7 +406,7 @@ end
 -- [5] PERFORMANCE - FPS Boost + Game Settings
 -- ═══════════════════════════════════════════════════════════════
 -- Apply game settings
-for _, setting in ipairs(_G.Configs["Game Settings"]) do
+for _, setting in ipairs(_G.Config.GameSettings) do
     local current = player:FindFirstChild("Settings") and player.Settings:FindFirstChild(setting)
     if not current or current.Value ~= true then
         settingsToggle:FireServer(setting, true)
@@ -390,7 +414,7 @@ for _, setting in ipairs(_G.Configs["Game Settings"]) do
 end
 
 -- Black Screen (FPS Boost)
-local BlackScreen = _G.Configs["Fps Boost"]
+local BlackScreen = _G.Config.FpsBoost
 
 local function setBlack(state)
     if state then
@@ -518,7 +542,7 @@ end)
 -- ═══════════════════════════════════════════════════════════════
 -- [7] HORST DISPLAY
 -- ═══════════════════════════════════════════════════════════════
-if _G.Configs["Horst Display"] then
+if _G.Config.HorstDisplay then
 task.spawn(function()
     local data = player:WaitForChild("Data", 30)
     if not data then
@@ -627,7 +651,7 @@ task.spawn(function()
 
         -- Important items
         local important = {}
-        local importantNames = _G.Configs["Important Items"] or {}
+        local importantNames = _G.Config.ImportantItems or {}
 
         for _, crateInfo in pairs(cratesList) do
             for _, keyword in pairs(importantNames) do
@@ -689,7 +713,7 @@ end -- HorstDisplay
 -- ═══════════════════════════════════════════════════════════════
 
 -- Auto Hit (ตีมอนใกล้ + สกิล Z)
-if _G.Configs["Auto Hit"] then
+if _G.Config.AutoHit then
 task.spawn(function()
     while task.wait(0.4) do
         pcall(function()
@@ -719,7 +743,7 @@ end)
 end -- AutoHit
 
 -- Auto Stats (Level 1-1000 = Melee only, Level 1000+ = Sword/Defense/Power)
-if _G.Configs["Auto Stats"] then
+if _G.Config.AutoStats then
 task.spawn(function()
     while task.wait(5) do
         pcall(function()
@@ -729,7 +753,7 @@ task.spawn(function()
             local level = player.Data.Level.Value or 0
             print("[STATS] Lv." .. level .. " | Stat points:", points)
 
-            if level < _G.Configs["Haki Min Level"] then
+            if level < _G.Config.HakiMinLevel then
                 -- Level 1-999: Melee 2 + Defense 1 ต่อรอบ (สัดส่วน 67%/33%)
                 local melee, defense = 0, 0
                 while points > 0 do
@@ -783,9 +807,9 @@ local function upgradeStats()
     pcall(function() points = player.Data.StatPoints.Value or 0 end)
     if points <= 0 then return end
 
-    local swordPts   = math.floor(points * _G.Configs["Stat Sword"] / 100)
-    local defensePts = math.floor(points * _G.Configs["Stat Defense"] / 100)
-    local powerPts   = math.floor(points * _G.Configs["Stat Power"] / 100)
+    local swordPts   = math.floor(points * _G.Config.StatSword / 100)
+    local defensePts = math.floor(points * _G.Config.StatDefense / 100)
+    local powerPts   = math.floor(points * _G.Config.StatPower / 100)
 
     local stats = {
         { name = "Sword",   amount = swordPts },
@@ -832,7 +856,7 @@ local function buyDarkBlade()
     local money = player.Data.Money.Value
     print("[WEAPON] Gems:", gem, "Money:", money)
 
-    if gem < _G.Configs["Dark Blade Gems"] or money < _G.Configs["Dark Blade Money"] then
+    if gem < _G.Config.DarkBladeGems or money < _G.Config.DarkBladeMoney then
         print("[WEAPON] ❌ Not enough resources!")
         isBuyingDarkBlade = false
         return false
@@ -1209,7 +1233,7 @@ local function fruitFarmLoop()
     
     local keyCodes = {Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V}
     
-    while _G.Configs["Fruit Farm"] and isFruitFarming do
+    while _G.Config.FruitFarm and isFruitFarming do
         task.wait(0.5)
         
         local char = player.Character
@@ -1217,7 +1241,7 @@ local function fruitFarmLoop()
         if char.Humanoid.Health <= 0 then continue end
         
         local hrp = char.HumanoidRootPart
-        local lockPos = _G.Configs["Fruit Farm Pos"]
+        local lockPos = _G.Config.FruitFarmPos
         
         -- ล็อคตำแหน่ง
         if (hrp.Position - lockPos.Position).Magnitude > 5 then
@@ -1225,7 +1249,7 @@ local function fruitFarmLoop()
         end
         
         -- Equip ผล
-        local targetFruit = _G.Configs["Target Fruit"]
+        local targetFruit = _G.Config.TargetFruit
         equipFruit(targetFruit)
         
         -- เปิด Haki + Observation Haki
@@ -1673,7 +1697,7 @@ local function setupBossKeyAutoListener()
     -- ฟัง event สำหรับ stock update
     pcall(function()
         RS.Remotes.MerchantRemotes.MerchantStockUpdate.OnClientEvent:Connect(function(...)
-            if not _G.Configs["Auto Buy Boss Key"] then return end
+            if not _G.Config.AutoBuyBossKey then return end
             
             local args = {...}
             oldPrint("[BOSS KEY] 🔔 Stock update event received!")
@@ -1985,7 +2009,7 @@ local function startFruitFarm()
     oldPrint("[FRUIT] ========== FRUIT FARM START ==========")
     isFruitFarming = true
     
-    local targetFruit = _G.Configs.TargetFruit
+    local targetFruit = _G.Config.TargetFruit
     
     -- 1. เช็คว่ามีผลแล้วหรือยัง
     oldPrint("[FRUIT] STEP 1: checkHasFruit...")
@@ -2009,8 +2033,8 @@ local function startFruitFarm()
         
         -- ไปฟาร์มต่อเลย (ไม่รีสเตตัส!)
         oldPrint("[FRUIT] STEP 6: Teleporting to farm position...")
-        local island = _G.Configs.FruitFarmIsland
-        local pos = _G.Configs.FruitFarmPos
+        local island = _G.Config.FruitFarmIsland
+        local pos = _G.Config.FruitFarmPos
         
         pcall(function()
             tpRemote:FireServer(island)
@@ -2114,8 +2138,8 @@ local function startFruitFarm()
         
         -- 6. Teleport to farm position
         oldPrint("[FRUIT] STEP 6: Teleporting to farm position...")
-        local island = _G.Configs.FruitFarmIsland
-        local pos = _G.Configs.FruitFarmPos
+        local island = _G.Config.FruitFarmIsland
+        local pos = _G.Config.FruitFarmPos
         
         pcall(function()
             tpRemote:FireServer(island)
@@ -2228,7 +2252,7 @@ local function farmThiefForHaki()
 
     while task.wait(0.5) do
         if not isHakiQuestActive then break end
-        if tick() - farmStart > _G.Configs["Haki Timeout"] then
+        if tick() - farmStart > _G.Config.HakiTimeout then
             print("[HAKI QUEST] ⚠️ Timeout!")
             isHakiQuestActive = false
             break
@@ -2272,7 +2296,7 @@ local function farmThiefForHaki()
             if goToHakiNPC() then
                 print("[HAKI QUEST] 🎉🎉 HAKI OBTAINED!")
 
-                if _G.Configs["Buy Dark Blade"] then
+                if _G.Config.BuyDarkBlade then
                     print("[HAKI QUEST] 🛒 Buying Dark Blade...")
                     isHakiQuestActive = false
                     pcall(buyDarkBlade)
@@ -2323,7 +2347,7 @@ local function farmThiefForHaki()
 end
 
 local function startHakiQuest()
-    if not _G.Configs["Haki Quest"] then return end
+    if not _G.Config.HakiQuest then return end
     print("[HAKI QUEST] Starting...")
     pcall(acceptHakiQuest)
     pcall(farmThiefForHaki)
@@ -2360,7 +2384,7 @@ local function equipToolByName(toolName, char)
 end
 
 local function farmLoop()
-    while _G.Configs.AutoFarm do
+    while _G.Config.AutoFarm do
         task.wait()
 
         -- รอถ้า Haki Quest, ซื้อดาบ, Fruit Farm, หรือ Ichigo Boss Farm กำลังทำงาน
@@ -2403,7 +2427,7 @@ local function farmLoop()
             local firstMob = true
 
             -- วน loop ตีมอนต่อเนื่อง จนกว่าเควสจะเสร็จ/ตาย/เควสเปลี่ยน
-            while _G.Configs.AutoFarm do
+            while _G.Config.AutoFarm do
                 -- เช็คว่าเควสยังอยู่ไหม
                 if char.Humanoid.Health <= 0 then break end
                 if not questUI.Quest.Visible then break end
@@ -2524,7 +2548,7 @@ end)
 task.spawn(function()
     task.wait(15)
     
-    if _G.Configs["Auto Buy Boss Key"] then
+    if _G.Config.AutoBuyBossKey then
         setupBossKeyAutoListener()
     end
 end)
@@ -2533,7 +2557,7 @@ end)
 task.spawn(function()
     task.wait(10)
 
-    while _G.Configs["Auto Farm"] do
+    while _G.Config.AutoFarm do
         local level = 0
         pcall(function() level = player.Data.Level.Value or 0 end)
         print("[SYSTEM] 🔍 Level check:", level)
@@ -2580,7 +2604,7 @@ task.spawn(function()
         end
 
         -- ===== Level < HakiMinLevel → ฟาร์มปกติ =====
-        if level < _G.Configs.HakiMinLevel then
+        if level < _G.Config.HakiMinLevel then
             print("[SYSTEM] 📈 Level " .. level .. " - Normal Farm (Melee)")
             task.wait(60) -- เช็คใหม่ทุก 60 วิ
             continue
@@ -2613,7 +2637,7 @@ task.spawn(function()
         end
 
         -- ===== PRIORITY 0.6: เช็ค Saber Boss Farm (อิสระจาก Ichigo) =====
-        if _G.Configs["Farm Saber Boss"] then
+        if _G.Config.FarmSaberBoss then
             -- เช็คว่ามี Boss Key อย่างน้อย 1 อันก่อน
             local bossKeyCount = checkBossKeyCount()
             if bossKeyCount >= 1 then
@@ -2626,7 +2650,7 @@ task.spawn(function()
         end
 
         -- ===== PRIORITY 0.7: เช็ค Ichigo Exchange =====
-        if _G.Configs["Exchange Ichigo"] and level >= _G.Configs["Ichigo Min Level"] then
+        if _G.Config.ExchangeIchigo and level >= _G.Config.IchigoMinLevel then
             print("[SYSTEM] ⚔️ Checking Ichigo Exchange...")
             if not checkDarkBlade("Ichigo") then
                 local hasAll, missing = checkIchigoRequirements()
@@ -2656,18 +2680,18 @@ task.spawn(function()
             print("[SYSTEM] ✅ Dark Blade found!")
             
             -- ถ้ามีดาบแล้ว + Level >= FruitMinLevel → เช็ค Fruit Farm
-            if _G.Configs["Fruit Farm"] and level >= _G.Configs["Fruit Min Level"] then
-                print("[SYSTEM] 🍎 Level " .. level .. " >= " .. _G.Configs["Fruit Min Level"] .. " → Checking Fruit Farm...")
+            if _G.Config.FruitFarm and level >= _G.Config.FruitMinLevel then
+                print("[SYSTEM] 🍎 Level " .. level .. " >= " .. _G.Config.FruitMinLevel .. " → Checking Fruit Farm...")
                 
-                local hasFruit = checkHasFruit(_G.Configs["Target Fruit"])
+                local hasFruit = checkHasFruit(_G.Config.TargetFruit)
                 if hasFruit then
-                    print("[SYSTEM] ✅ Already have " .. _G.Configs["Target Fruit"] .. " → Fruit Farm Mode!")
+                    print("[SYSTEM] ✅ Already have " .. _G.Config.TargetFruit .. " → Fruit Farm Mode!")
                     isFruitFarming = true
-                    equipFruit(_G.Configs["Target Fruit"])
+                    equipFruit(_G.Config.TargetFruit)
                     
                     -- Teleport to fruit farm position
-                    local island = _G.Configs["Fruit Farm Island"]
-                    local pos = _G.Configs["Fruit Farm Pos"]
+                    local island = _G.Config.FruitFarmIsland
+                    local pos = _G.Config.FruitFarmPos
                     pcall(function() tpRemote:FireServer(island) end)
                     task.wait(3)
                     
@@ -2682,7 +2706,7 @@ task.spawn(function()
                     task.spawn(fruitFarmLoop)
                     break
                 else
-                    print("[SYSTEM] ❌ No " .. _G.Configs["Target Fruit"] .. " → Starting Fruit Farm process...")
+                    print("[SYSTEM] ❌ No " .. _G.Config.TargetFruit .. " → Starting Fruit Farm process...")
                     oldPrint("[DEBUG] About to call startFruitFarm...")
                     local ok, err = pcall(startFruitFarm)
                     if ok then
@@ -2706,7 +2730,7 @@ task.spawn(function()
         if hasHaki then
             -- STEP 3: มี Haki แต่ไม่มีดาบ → ซื้อดาบ
             print("[SYSTEM] ✅ Has Haki but no Dark Blade → Buying...")
-            if _G.Configs["Buy Dark Blade"] then
+            if _G.Config.BuyDarkBlade then
                 pcall(buyDarkBlade)
             end
             print("[SYSTEM] 🗡️ Dark Blade process done! Normal Farm...")
@@ -2714,7 +2738,7 @@ task.spawn(function()
         end
 
         -- STEP 4: ไม่มีทั้ง Haki + ดาบ → ทำ Haki Quest
-        if _G.Configs["Haki Quest"] and not isHakiQuestActive then
+        if _G.Config.HakiQuest and not isHakiQuestActive then
             print("[SYSTEM] 🔥 No Haki + No Dark Blade → Starting Haki Quest...")
             isHakiQuestActive = true
             pcall(startHakiQuest)
