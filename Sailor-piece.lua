@@ -382,7 +382,7 @@ end
 -- [5] PERFORMANCE - FPS Boost + Game Settings
 -- ═══════════════════════════════════════════════════════════════
 -- Apply game settings
-for _, setting in ipairs(_G.Configs.GameSettings) do
+for _, setting in ipairs(_G.Configs["Game Settings"]) do
     local current = player:FindFirstChild("Settings") and player.Settings:FindFirstChild(setting)
     if not current or current.Value ~= true then
         settingsToggle:FireServer(setting, true)
@@ -390,7 +390,7 @@ for _, setting in ipairs(_G.Configs.GameSettings) do
 end
 
 -- Black Screen (FPS Boost)
-local BlackScreen = _G.Configs.FpsBoost
+local BlackScreen = _G.Configs["Fps Boost"]
 
 local function setBlack(state)
     if state then
